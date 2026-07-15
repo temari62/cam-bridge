@@ -1,0 +1,7 @@
+# CamBridge dependencies (Python 3.10+ on Windows 11)
+opencv-python>=4.8
+numpy>=1.24
+sounddevice>=0.4.6
+# pyvirtualcam is only needed on the REMOTE PC (receiver).
+# The OBS Virtual Camera must be installed (comes with OBS Studio).
+pyvirtualcam>=0.11
