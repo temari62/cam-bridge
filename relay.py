@@ -13,14 +13,18 @@ Usage (on the VPS):
     python3 relay.py
     python3 relay.py --video-port 50007 --audio-port 50008 --bind 0.0.0.0
 
+Encrypted (recommended over the internet) -- provide a certificate + key:
+    python3 relay.py --tls --certfile relay-cert.pem --keyfile relay-key.pem
+
 Open the two TCP ports in the VPS firewall / security group.
 
-Handshake each client sends immediately on connect:
+Handshake each client sends immediately on connect (inside TLS if enabled):
     MAGIC(4) + role(1: 'S'|'R') + room_len(1) + room(room_len bytes, utf-8)
 """
 
 import argparse
 import socket
+import ssl
 import threading
 import time
 
@@ -97,12 +101,19 @@ class Channel:
                 ).start()
 
 
-def handle(channel, conn, addr):
-    conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+def handle(channel, conn, addr, ssl_ctx):
     try:
+        if ssl_ctx is not None:
+            conn = ssl_ctx.wrap_socket(conn, server_side=True)
+        conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         hs = read_handshake(conn)
-    except OSError:
-        hs = None
+    except (OSError, ssl.SSLError) as e:
+        print(f"[{channel.name}] rejected connection from {addr[0]}: {e}")
+        try:
+            conn.close()
+        except OSError:
+            pass
+        return
     if hs is None or hs[0] not in ("S", "R"):
         conn.close()
         return
@@ -111,15 +122,16 @@ def handle(channel, conn, addr):
     channel.register(role, room, conn)
 
 
-def serve(channel, bind, port):
+def serve(channel, bind, port, ssl_ctx):
     ls = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     ls.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     ls.bind((bind, port))
     ls.listen(50)
-    print(f"[{channel.name}] listening on {bind}:{port}")
+    kind = "TLS" if ssl_ctx is not None else "plain"
+    print(f"[{channel.name}] listening on {bind}:{port} ({kind})")
     while True:
         conn, addr = ls.accept()
-        threading.Thread(target=handle, args=(channel, conn, addr), daemon=True).start()
+        threading.Thread(target=handle, args=(channel, conn, addr, ssl_ctx), daemon=True).start()
 
 
 def main():
@@ -127,12 +139,22 @@ def main():
     p.add_argument("--bind", default="0.0.0.0", help="Listen address (default all interfaces)")
     p.add_argument("--video-port", type=int, default=50007)
     p.add_argument("--audio-port", type=int, default=50008)
+    p.add_argument("--tls", action="store_true", help="Enable TLS encryption (needs --certfile/--keyfile)")
+    p.add_argument("--certfile", help="Path to TLS certificate (PEM)")
+    p.add_argument("--keyfile", help="Path to TLS private key (PEM)")
     args = p.parse_args()
+
+    ssl_ctx = None
+    if args.tls:
+        if not (args.certfile and args.keyfile):
+            p.error("--tls requires --certfile and --keyfile")
+        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_ctx.load_cert_chain(certfile=args.certfile, keyfile=args.keyfile)
 
     video = Channel("video")
     audio = Channel("audio")
-    threading.Thread(target=serve, args=(video, args.bind, args.video_port), daemon=True).start()
-    threading.Thread(target=serve, args=(audio, args.bind, args.audio_port), daemon=True).start()
+    threading.Thread(target=serve, args=(video, args.bind, args.video_port, ssl_ctx), daemon=True).start()
+    threading.Thread(target=serve, args=(audio, args.bind, args.audio_port, ssl_ctx), daemon=True).start()
 
     print("CamBridge relay running. Press Ctrl+C to stop.")
     try:

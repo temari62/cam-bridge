@@ -50,7 +50,9 @@ special support** — this is what makes it platform-agnostic across Teams, Zoom
 |-----------|---------|----------------|
 | `sender.py` | Local PC | Capture webcam (OpenCV) + mic (sounddevice), encode, connect out to relay |
 | `receiver.py` | Remote PC | Connect out to relay, push video → virtual camera, audio → virtual mic |
-| `relay.py` | Public VPS | Pair sender+receiver by room token, forward the stream (stdlib only) |
+| `relay.py` | Public VPS | Pair sender+receiver by room token, forward the stream; optional TLS (stdlib only) |
+| `sender_gui.py` / `receiver_gui.py` | Local / Remote PC | tkinter front-ends: relay + room fields, TLS toggle, Start/Stop, live log |
+| `gen_cert.sh` | Public VPS | One-command self-signed TLS certificate generator for the relay |
 | Virtual camera driver | Remote PC | OBS Virtual Camera (system-wide camera device) |
 | Virtual audio driver | Remote PC | VB-Audio Virtual Cable (system-wide mic device) |
 | Network transport | All | Two outbound TCP connections (video + audio), length-prefixed frames |
@@ -134,17 +136,19 @@ Full click-by-click steps are in **SETUP.md**.
 - Video/audio are only loosely synced (separate streams); acceptable for talking heads.
 - Requires OBS and VB-CABLE installed on the remote PC, plus a VPS running the relay.
 - Someone must start the receiver on the remote PC (e.g. via Remote Desktop) before joining.
-- Relay traffic is **not encrypted** end-to-end. The room token gates who can pair, but the media
-  crosses the internet in the clear. For a stronger setup, run the relay behind an SSH tunnel or
-  wrap the connections in TLS (stunnel) — see the productization path. Until then, use a strong,
-  unguessable room token and a relay you control.
+- **Encryption is now available via TLS** (`--tls` on all three programs, `gen_cert.sh` to make a
+  certificate). When enabled with a verified certificate, media is encrypted client↔relay in both
+  directions. Note the relay still *terminates* TLS, so the VPS you operate sees plaintext in the
+  middle — fine since you control it, but it is not zero-knowledge end-to-end. Still use a strong,
+  unguessable room token. If TLS is left off, the media crosses the internet in the clear.
 
 **Path to a polished product, in order of value:**
-1. **Encrypt the relay link** — wrap the connections in TLS (stunnel/`ssl`) so media isn't in the
-   clear over the internet. Highest-priority hardening.
-2. **One-click installer** (Inno Setup) that bundles the sender/receiver `.exe` and silently
-   installs VB-CABLE.
-3. **Simple GUI** with a device picker, connection status, and a big Start/Stop button.
+1. **[Done] Encrypt the relay link** — TLS is implemented (client↔relay). Next step for true
+   end-to-end secrecy: terminate TLS at the endpoints instead of the relay (receiver acts as TLS
+   server through the relay's byte pipe), so the VPS never sees plaintext.
+2. **[Done] Simple GUI** — `sender_gui.py` / `receiver_gui.py` give a relay+room form, TLS toggle,
+   and Start/Stop. Could still add an in-GUI camera/mic picker.
+3. **One-click installer** (Inno Setup) that bundles the `.exe` files and silently installs VB-CABLE.
 4. **Run the relay as a managed service** (systemd on the VPS) and auto-start the receiver as a
    Windows service so both are always ready.
 5. **Opus/H.264 encoding + WebRTC** to cut bandwidth and latency and add encryption natively.

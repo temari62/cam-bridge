@@ -1,1 +1,20 @@
-__pycache__
+# Python
+__pycache__/
+*.pyc
+
+# PyInstaller build output
+build/
+dist/
+*.spec
+
+# TLS material (never commit private keys)
+*.pem
+
+# Per-user GUI settings
+.cambridge_sender.json
+.cambridge_receiver.json
+
+# Installer vendor binaries and output
+installer/vendor/*.exe
+installer/vendor/*.pem
+installer/Output/
