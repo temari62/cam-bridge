@@ -1,4 +1,5 @@
-# CamBridge dependencies (Python 3.10+ on Windows 11)
+# CamBridge dependencies (Python 3.10+ on Windows 11) — for sender.py and receiver.py.
+# The relay (relay.py) needs NOTHING beyond a standard Python 3 install on the VPS.
 opencv-python>=4.8
 numpy>=1.24
 sounddevice>=0.4.6

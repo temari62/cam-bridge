@@ -6,31 +6,34 @@ meeting shows **the camera and microphone of their local PC**.
 - **Local PC** = the machine physically in front of the employee (real webcam + mic).
 - **Remote PC** = the machine that actually runs Teams / Zoom / Meet and joins the standup.
 
-The remote PC exposes a **virtual camera** and a **virtual microphone**. CamBridge streams
-the local PC's real camera and mic to the remote PC and feeds them into those virtual devices.
-Any meeting app on the remote PC then simply picks "CamBridge Camera" and "CamBridge Mic"
-like it would any normal webcam/headset — so this works the same for Teams, Zoom, Google Meet,
-or anything else.
+The two PCs are in different places on the internet, so they connect through a small **relay
+server** on a public VPS — both dial *out* to it, which sidesteps home NAT/firewalls entirely
+(no port forwarding on either PC). The relay pairs them by a shared **room token** and forwards
+the stream. The remote PC exposes a **virtual camera** and a **virtual microphone**, and any
+meeting app on it simply picks "OBS Virtual Camera" and "CABLE Output" like a normal
+webcam/headset — so this works the same for Teams, Zoom, Google Meet, or anything else.
 
 ---
 
 ## 1. How it works (data flow)
 
 ```
-   LOCAL PC (employee)                         REMOTE PC (joins the meeting)
- ┌─────────────────────┐                     ┌───────────────────────────────────┐
- │  Real webcam  ──►    │   video (TCP)       │  ──►  Virtual Camera (OBS Cam)     │
- │  sender.py    ──────────────────────────► │       receiver.py                 │
- │  Real mic     ──►    │   audio (TCP)       │  ──►  Virtual Mic (VB-CABLE)       │
- └─────────────────────┘                     └───────────────┬───────────────────┘
-                                                              │ selected as
-                                                              ▼ camera + mic
-                                                  Teams / Zoom / Google Meet
+  LOCAL PC (employee)              RELAY (public VPS)            REMOTE PC (joins the meeting)
+ ┌────────────────────┐          ┌──────────────────┐         ┌──────────────────────────────┐
+ │ Real webcam ─►      │  video   │  pairs S and R   │  video  │  ─► Virtual Camera (OBS Cam)  │
+ │ Real mic    ─► sender├────────►│  by room token,  ├────────►│      receiver.py             │
+ │             sender.py│  audio   │  forwards bytes  │  audio  │  ─► Virtual Mic (VB-CABLE)    │
+ └────────────────────┘  (out)    └──────────────────┘  (out)  └───────────────┬──────────────┘
+                                                                                │ selected as
+                                                                                ▼ camera + mic
+                                                                    Teams / Zoom / Google Meet
 ```
 
 1. `sender.py` on the local PC captures the webcam and microphone.
-2. It streams the video and audio over the network to the remote PC (two TCP connections).
-3. `receiver.py` on the remote PC receives the streams and writes:
+2. Both `sender.py` and `receiver.py` connect *outward* to `relay.py` on the VPS, each announcing
+   the same room token. The relay pairs them and forwards the sender's stream to the receiver
+   (video and audio on two separate TCP connections).
+3. `receiver.py` on the remote PC writes:
    - video frames into a **virtual camera** device, and
    - audio samples into a **virtual audio input** (virtual mic) device.
 4. In Teams/Zoom/Meet on the remote PC, the employee picks the virtual camera and virtual mic.
@@ -45,11 +48,12 @@ special support** — this is what makes it platform-agnostic across Teams, Zoom
 
 | Component | Runs on | Responsibility |
 |-----------|---------|----------------|
-| `sender.py` | Local PC | Capture webcam (OpenCV) + mic (sounddevice), encode, stream out |
-| `receiver.py` | Remote PC | Receive streams, push video → virtual camera, audio → virtual mic |
+| `sender.py` | Local PC | Capture webcam (OpenCV) + mic (sounddevice), encode, connect out to relay |
+| `receiver.py` | Remote PC | Connect out to relay, push video → virtual camera, audio → virtual mic |
+| `relay.py` | Public VPS | Pair sender+receiver by room token, forward the stream (stdlib only) |
 | Virtual camera driver | Remote PC | OBS Virtual Camera (system-wide camera device) |
 | Virtual audio driver | Remote PC | VB-Audio Virtual Cable (system-wide mic device) |
-| Network transport | Both | Two TCP connections (video + audio), length-prefixed frames |
+| Network transport | All | Two outbound TCP connections (video + audio), length-prefixed frames |
 
 ---
 
@@ -74,8 +78,10 @@ as its microphone. Windows has no user-mode "virtual mic" API, so a signed drive
 the standard, safe approach — and you confirmed admin rights, so installing it is fine.
 
 **Transport:** plain TCP with 4-byte length-prefixed frames. Video and audio each get their own
-connection so audio stays smooth and isn't blocked behind large video frames. The **receiver is
-the server** (it listens); the **sender connects** to the remote PC's IP.
+connection so audio stays smooth and isn't blocked behind large video frames. Both PCs connect
+*outward* to the relay; on connect each sends a tiny handshake (`role` + `room token`) so the
+relay can pair the right sender with the right receiver. The relay is a **dumb byte pipe** once
+paired — it never parses the media, so framing is preserved end-to-end.
 
 ### Why not a fully native driver?
 A "proper" productized version would ship one signed Windows driver package (a Media Foundation
@@ -88,29 +94,34 @@ See §6 for the productization path.
 
 ## 4. Networking
 
-Both machines are personal PCs, so they are probably **not** on the same LAN and sit behind home
-routers. Three options, easiest first:
+The two PCs are far apart on the internet, both behind home NAT, so neither can accept an incoming
+connection reliably (home routers block it, and CGNAT — common on 5G/fibre — makes it impossible
+even with port forwarding). The fix is a **relay server**:
 
-1. **Tailscale (recommended).** Install the free [Tailscale](https://tailscale.com) on both PCs
-   and sign in with the same account. Each PC gets a stable private IP (e.g. `100.x.y.z`) that
-   works from anywhere with no port-forwarding and encrypted end-to-end. Point the sender at the
-   remote PC's Tailscale IP. This is by far the simplest for remote/home machines.
-2. **Same LAN / office VPN.** If both are on the same network or company VPN, just use the remote
-   PC's local IP (e.g. `192.168.1.50`) and open the two TCP ports in Windows Firewall.
-3. **Port forwarding.** Possible but discouraged — exposes ports to the internet.
+- Rent a small Linux VPS with a **public IP** (any provider; the cheapest ~$5/mo tier is plenty).
+- Run `relay.py` on it and open TCP ports **50007** and **50008** in the VPS firewall / security group.
+- Both `sender.py` and `receiver.py` connect *outward* to the VPS. Outbound connections pass
+  through home NAT with no router changes, so nothing needs configuring on either home network.
 
-Default ports: **50007** (video), **50008** (audio). Configurable.
+The relay pairs a sender and receiver using a shared **room token** (`--room`), so multiple
+employees can share one relay at the same time — each pair just uses its own token. The token also
+acts as lightweight access control, so pick something unguessable.
+
+Default ports: **50007** (video), **50008** (audio). Configurable on all three programs.
 
 ---
 
 ## 5. Deployment overview
 
-On the **remote PC** (one-time): install OBS Studio, install VB-CABLE, install the CamBridge
-receiver, allow the two ports through the firewall. Then each meeting: run the receiver, open
-Teams/Zoom/Meet, pick "OBS Virtual Camera" and "CABLE Output" as camera/mic, and join.
+On the **VPS** (one-time): run `relay.py` and open ports 50007/50008. Best run as an always-on
+service so it's ready for every meeting.
 
-On the **local PC** (one-time): install the CamBridge sender. Each meeting: run the sender with
-the remote PC's IP.
+On the **remote PC** (one-time): install OBS Studio, install VB-CABLE, install the CamBridge
+receiver. Then each meeting: run the receiver (pointing at the relay + room), open Teams/Zoom/Meet,
+pick "OBS Virtual Camera" and "CABLE Output" as camera/mic, and join.
+
+On the **local PC** (one-time): install the CamBridge sender. Each meeting: run the sender pointing
+at the same relay + room.
 
 Full click-by-click steps are in **SETUP.md**.
 
@@ -121,18 +132,23 @@ Full click-by-click steps are in **SETUP.md**.
 **Prototype limitations (be aware):**
 - Latency on a good connection is roughly 150–400 ms — fine for a standup, not for music.
 - Video/audio are only loosely synced (separate streams); acceptable for talking heads.
-- Requires OBS and VB-CABLE installed on the remote PC.
+- Requires OBS and VB-CABLE installed on the remote PC, plus a VPS running the relay.
 - Someone must start the receiver on the remote PC (e.g. via Remote Desktop) before joining.
-- No encryption on the raw TCP itself — **run it over Tailscale** (encrypted) or a VPN, not the
-  open internet.
+- Relay traffic is **not encrypted** end-to-end. The room token gates who can pair, but the media
+  crosses the internet in the clear. For a stronger setup, run the relay behind an SSH tunnel or
+  wrap the connections in TLS (stunnel) — see the productization path. Until then, use a strong,
+  unguessable room token and a relay you control.
 
 **Path to a polished product, in order of value:**
-1. **One-click installer** (Inno Setup) that bundles the sender/receiver `.exe`, silently
-   installs VB-CABLE, and sets firewall rules.
-2. **Simple GUI** with a device picker, connection status, and a big Start/Stop button.
-3. **Auto-start receiver** as a Windows service so the remote PC is always ready.
-4. **Opus/H.264 encoding + WebRTC** to cut bandwidth and latency and add encryption natively.
-5. **Native signed virtual-camera + virtual-audio driver** to remove the OBS/VB-CABLE dependency.
+1. **Encrypt the relay link** — wrap the connections in TLS (stunnel/`ssl`) so media isn't in the
+   clear over the internet. Highest-priority hardening.
+2. **One-click installer** (Inno Setup) that bundles the sender/receiver `.exe` and silently
+   installs VB-CABLE.
+3. **Simple GUI** with a device picker, connection status, and a big Start/Stop button.
+4. **Run the relay as a managed service** (systemd on the VPS) and auto-start the receiver as a
+   Windows service so both are always ready.
+5. **Opus/H.264 encoding + WebRTC** to cut bandwidth and latency and add encryption natively.
+6. **Native signed virtual-camera + virtual-audio driver** to remove the OBS/VB-CABLE dependency.
 
 ---
 

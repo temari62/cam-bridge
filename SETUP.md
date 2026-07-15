@@ -1,10 +1,49 @@
 # CamBridge — Setup Guide
 
-Follow this once per machine. It takes ~15 minutes. You need **admin rights on the remote PC**.
+Follow this once per machine. It takes ~20 minutes. You need **admin rights on the remote PC**.
 
-Two roles:
+Three pieces:
+- **RELAY** = a small cloud server (VPS) with a public IP that both PCs connect out to.
 - **LOCAL PC** = where the employee sits (real webcam + mic).
 - **REMOTE PC** = the machine that joins Teams/Zoom/Meet.
+
+Because both PCs are on the open internet behind home routers, they can't reach each other
+directly — they meet in the middle at the relay. Set up the relay once (Part 0); it can serve all
+your employees at the same time.
+
+---
+
+## Part 0 — RELAY SERVER (one-time, serves everyone)
+
+### 1. Rent a small VPS
+Any provider works (DigitalOcean, Hetzner, Vultr, AWS Lightsail, etc.). The cheapest tier
+(~$4–6/month, 1 shared CPU) is plenty. Choose **Ubuntu 22.04+** and note its **public IP**.
+
+### 2. Open the ports
+In the provider's firewall / security group, allow inbound **TCP 50007** and **TCP 50008**.
+On the server itself (if `ufw` is on):
+```
+sudo ufw allow 50007/tcp && sudo ufw allow 50008/tcp
+```
+
+### 3. Run the relay
+Copy `relay.py` to the server (no dependencies — plain Python 3). Then:
+```
+python3 relay.py
+```
+You should see `listening on 0.0.0.0:50007` and `...50008`. Leave it running.
+
+To keep it running after you log out, use `tmux`/`screen`, or install it as a service:
+```
+# quick-and-dirty always-on:
+nohup python3 relay.py > relay.log 2>&1 &
+```
+(For production, run it under `systemd` — see DESIGN.md §6.)
+
+### 4. Pick a room token
+Choose a hard-to-guess shared word/phrase per employee (e.g. `jose-standup-7fKq`). The local and
+remote PC must use the **same** token to be paired. Anyone who knows the relay IP *and* the token
+could connect, so treat it like a password.
 
 ---
 
@@ -32,13 +71,8 @@ Copy the `CamBridge` folder to the remote PC. Open **Command Prompt** in that fo
 pip install -r requirements.txt
 ```
 
-### 5. Allow the network ports through Windows Firewall
-In an **admin** Command Prompt:
-```
-netsh advfirewall firewall add rule name="CamBridge Video" dir=in action=allow protocol=TCP localport=50007
-netsh advfirewall firewall add rule name="CamBridge Audio" dir=in action=allow protocol=TCP localport=50008
-```
-(If you use Tailscale — see Part C — this is usually unnecessary, but it doesn't hurt.)
+No Windows Firewall changes are needed — the remote PC only makes **outbound** connections to the
+relay.
 
 ---
 
@@ -55,24 +89,21 @@ pip install -r requirements.txt
 
 ---
 
-## Part C — Networking (do this on BOTH PCs)
+## Part C — What each PC needs to connect
 
-Because both are personal PCs, the easiest reliable option is **Tailscale**:
-1. Install Tailscale on both PCs: https://tailscale.com/download .
-2. Sign in with the **same account** on both.
-3. On the **remote PC**, note its Tailscale IP (looks like `100.x.y.z`) — run `tailscale ip -4`
-   or check the Tailscale admin page. This is the IP the local PC will connect to.
-
-If both PCs are on the same office LAN/VPN instead, just use the remote PC's local IP
-(e.g. `192.168.1.50`) and make sure Part A step 5 (firewall) is done.
+Both PCs point at the **same relay IP** and use the **same room token** (from Part 0). There is no
+per-PC IP to look up and no router setup — the relay handles the meeting-in-the-middle. Order
+doesn't matter; whichever starts first waits for the other, and either will reconnect
+automatically if the connection drops.
 
 ---
 
 ## Part D — Running it (every meeting)
 
 ### On the REMOTE PC
-1. Double-click **`start_receiver.bat`** (or run `python receiver.py`).
-   You should see `listening on 0.0.0.0:50007` and `auto-detected CABLE Input`.
+1. Double-click **`start_receiver.bat`**. Enter the **relay IP** and the **room token**.
+   (Or run `python receiver.py --host <RELAY_IP> --room <TOKEN>`.)
+   You should see `connected to relay ...` and `auto-detected CABLE Input`.
 2. Open your meeting app and set devices:
    - **Teams:** Settings → Devices → Camera = **OBS Virtual Camera**, Microphone = **CABLE Output (VB-Audio Virtual Cable)**.
    - **Zoom:** Settings → Video → Camera = **OBS Virtual Camera**; Settings → Audio → Microphone = **CABLE Output**.
@@ -80,8 +111,8 @@ If both PCs are on the same office LAN/VPN instead, just use the remote PC's loc
 3. Join the meeting.
 
 ### On the LOCAL PC
-1. Double-click **`start_sender.bat`**, enter the remote PC's IP (Tailscale `100.x.y.z`), press Enter.
-   (Or run `python sender.py --host 100.x.y.z`.)
+1. Double-click **`start_sender.bat`**. Enter the **same relay IP** and the **same room token**, press Enter.
+   (Or run `python sender.py --host <RELAY_IP> --room <TOKEN>`.)
 2. The webcam light turns on and the remote PC's virtual camera starts showing your face.
 
 That's it — the meeting now shows the employee's **local** camera and mic.
@@ -104,8 +135,12 @@ pass the right one, e.g. `python sender.py --host <ip> --camera 1`.
 
 **Choppy or laggy** — lower quality/size: `python sender.py --host <ip> --width 960 --height 540 --fps 20 --quality 65`.
 
-**Sender says "waiting for receiver"** — start the receiver on the remote PC first, and confirm
-the IP is reachable (`ping <ip>` from the local PC).
+**Sender/receiver says "waiting for relay"** — the relay isn't reachable. Confirm `relay.py` is
+running on the VPS, the VPS firewall allows TCP 50007/50008, and the relay IP is correct
+(`ping <relay_ip>`).
+
+**Connected to relay but no video/audio** — the two sides are using **different room tokens**, or
+the other side isn't running yet. Make sure both use the exact same `--room` value.
 
 **Echo in the meeting** — make sure the remote PC's *speakers* are muted or use headphones on the
 remote side; the audio only needs to flow into CABLE, not out of the remote PC's speakers.
