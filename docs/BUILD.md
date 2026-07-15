@@ -15,11 +15,11 @@ Windows machine. So run the build on any Windows 11 PC with Python 3.10+ install
 ### Steps
 1. Copy the whole `cam-bridge` folder to a Windows 11 PC that has
    **Python 3.10+** (installed with "Add python.exe to PATH").
-2. Double-click **`build_exe.bat`**.
+2. Double-click **`client\build_exe.bat`**.
    It installs the dependencies + PyInstaller and builds both apps.
-3. When it finishes, the executables are in the new **`dist\`** folder:
-   - `dist\CamBridge-Sender.exe`
-   - `dist\CamBridge-Receiver.exe`
+3. When it finishes, the executables are in the new **`client\dist\`** folder:
+   - `client\dist\CamBridge-Sender.exe`
+   - `client\dist\CamBridge-Receiver.exe`
 
 First launch of a onefile exe is a few seconds slower (it unpacks to a temp folder);
 after that it's normal.

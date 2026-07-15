@@ -1,7 +1,7 @@
 ; ============================================================================
 ;  CamBridge Sender - Inno Setup installer (for the LOCAL PC)
 ;  Just installs CamBridge-Sender.exe + shortcuts. No drivers needed.
-;  Requires, before compiling:  ..\dist\CamBridge-Sender.exe
+;  Requires, before compiling:  ..\client\dist\CamBridge-Sender.exe
 ; ============================================================================
 
 #define AppName "CamBridge Sender"
@@ -29,7 +29,7 @@ PrivilegesRequired=admin
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
 
 [Files]
-Source: "..\dist\{#ExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\client\dist\{#ExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "vendor\relay-cert.pem"; DestDir: "{app}"; Flags: skipifsourcedoesntexist
 
 [Icons]

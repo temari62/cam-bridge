@@ -3,7 +3,7 @@ REM =====================================================================
 REM  CamBridge - build the Windows installers with Inno Setup 6
 REM  Prereqs:
 REM    1) Inno Setup 6 installed  (https://jrsoftware.org/isdl.php)
-REM    2) build_exe.bat already run  (so ..\dist\*.exe exist)
+REM    2) build_exe.bat already run  (so ..\client\dist\*.exe exist)
 REM    3) vendor\VBCABLE_Setup_x64.exe present (see vendor\README.txt)
 REM  Output installers land in:  installer\Output\
 REM =====================================================================
@@ -21,8 +21,8 @@ if not defined ISCC (
 )
 
 REM --- sanity checks ---
-if not exist "..\dist\CamBridge-Receiver.exe" (
-  echo ERROR: ..\dist\CamBridge-Receiver.exe missing. Run build_exe.bat first.
+if not exist "..\client\dist\CamBridge-Receiver.exe" (
+  echo ERROR: ..\client\dist\CamBridge-Receiver.exe missing. Run build_exe.bat first.
   pause & exit /b 1
 )
 if not exist "vendor\VBCABLE_Setup_x64.exe" (
@@ -33,11 +33,11 @@ if not exist "vendor\VBCABLE_Setup_x64.exe" (
 echo Building Receiver installer...
 "%ISCC%" "CamBridge-Receiver.iss" || goto :err
 
-if exist "..\dist\CamBridge-Sender.exe" (
+if exist "..\client\dist\CamBridge-Sender.exe" (
   echo Building Sender installer...
   "%ISCC%" "CamBridge-Sender.iss" || goto :err
 ) else (
-  echo (Skipping Sender installer - ..\dist\CamBridge-Sender.exe not found.)
+  echo (Skipping Sender installer - ..\client\dist\CamBridge-Sender.exe not found.)
 )
 
 echo.

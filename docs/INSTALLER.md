@@ -15,7 +15,7 @@ Two installers get produced:
 Inno Setup, like PyInstaller, compiles **only on Windows** — there's no way to produce the
 `Setup.exe` from Linux. On a Windows 11 PC:
 
-1. **Build the exes:** run `build_exe.bat` (see BUILD.md). This creates `dist\CamBridge-*.exe`.
+1. **Build the exes:** run `client\build_exe.bat` (see BUILD.md). This creates `client\dist\CamBridge-*.exe`.
 2. **Install Inno Setup 6:** https://jrsoftware.org/isdl.php .
 3. **Add the driver installer(s):** follow `installer\vendor\README.txt` — at minimum drop
    `VBCABLE_Setup_x64.exe` into `installer\vendor\`. Optionally add the OBS installer and your

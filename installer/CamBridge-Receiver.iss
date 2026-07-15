@@ -5,7 +5,7 @@
 ;
 ;  Build with Inno Setup 6:  see build_installer.bat
 ;  Requires, before compiling:
-;    ..\dist\CamBridge-Receiver.exe        (run build_exe.bat first)
+;    ..\client\dist\CamBridge-Receiver.exe        (run build_exe.bat first)
 ;    vendor\VBCABLE_Setup_x64.exe          (download - see vendor\README.txt)
 ;    vendor\OBS-Studio-Full-Installer-x64.exe   (optional; auto-skipped if absent)
 ; ============================================================================
@@ -38,7 +38,7 @@ AlwaysRestart=yes
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
 
 [Files]
-Source: "..\dist\{#ExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\client\dist\{#ExeName}"; DestDir: "{app}"; Flags: ignoreversion
 ; Bundled driver installers, copied to a temp dir and removed after install:
 Source: "vendor\VBCABLE_Setup_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "vendor\OBS-Studio-Full-Installer-x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall skipifsourcedoesntexist

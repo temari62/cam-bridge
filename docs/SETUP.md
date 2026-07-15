@@ -27,7 +27,8 @@ sudo ufw allow 50007/tcp && sudo ufw allow 50008/tcp
 ```
 
 ### 3. Run the relay
-Copy `relay.py` to the server (no dependencies — plain Python 3). Then:
+Copy the `relay/` folder (contains `relay.py` and `gen_cert.sh`) to the server. It has no
+dependencies — plain Python 3. From inside that folder run:
 ```
 python3 relay.py
 ```
@@ -81,7 +82,7 @@ then **reboot** the PC.
 After reboot you'll have two new audio devices: **CABLE Input** and **CABLE Output**.
 
 ### 4. Install CamBridge dependencies
-Copy the `CamBridge` folder to the remote PC. Open **Command Prompt** in that folder and run:
+Copy the `client/` folder to the remote PC. Open **Command Prompt** in that folder and run:
 ```
 pip install -r requirements.txt
 ```
@@ -96,7 +97,7 @@ relay.
 ### 1. Install Python 3.10+ (same as above, tick "Add to PATH").
 
 ### 2. Install CamBridge dependencies
-Copy the `CamBridge` folder to the local PC, open Command Prompt in it, and run:
+Copy the `client/` folder to the local PC, open Command Prompt in it, and run:
 ```
 pip install -r requirements.txt
 ```
@@ -121,7 +122,7 @@ then click **Start**. The window shows a live status log; click **Stop** when do
 your last entries.
 
 ### On the REMOTE PC
-1. Double-click **`start_receiver_gui.bat`**. Enter the **relay IP** and **room token**, set TLS,
+1. Double-click **`start_receiver_gui.bat`** (in the `client` folder). Enter the **relay IP** and **room token**, set TLS,
    click **Start**. Wait for `virtual camera started` / `output ready` in the log.
    (Command-line alternative: `python receiver.py --host <RELAY_IP> --room <TOKEN> --tls --cafile relay-cert.pem`.)
 2. Open your meeting app and set devices:
@@ -131,7 +132,7 @@ your last entries.
 3. Join the meeting.
 
 ### On the LOCAL PC
-1. Double-click **`start_sender_gui.bat`**. Enter the **same relay IP**, **same room token**, and the
+1. Double-click **`start_sender_gui.bat`** (in the `client` folder). Enter the **same relay IP**, **same room token**, and the
    same TLS settings, then click **Start**.
    (Command-line alternative: `python sender.py --host <RELAY_IP> --room <TOKEN> --tls --cafile relay-cert.pem`.)
 2. The webcam light turns on and the remote PC's virtual camera starts showing your face.
@@ -172,7 +173,7 @@ remote side; the audio only needs to flow into CABLE, not out of the remote PC's
 ---
 
 ## Packaging as .exe (no Python for employees)
-To hand employees double-click apps with no Python install, run **`build_exe.bat`** once on any
-Windows 11 PC that has Python. It produces `dist\CamBridge-Sender.exe` and
-`dist\CamBridge-Receiver.exe`. Full instructions are in **BUILD.md**. (OBS and VB-CABLE still need
+To hand employees double-click apps with no Python install, run **`client\build_exe.bat`** once on
+any Windows 11 PC that has Python. It produces `client\dist\CamBridge-Sender.exe` and
+`client\dist\CamBridge-Receiver.exe`. Full instructions are in **BUILD.md**. (OBS and VB-CABLE still need
 installing on the remote PC — those are system drivers, not bundled into the exe.)
