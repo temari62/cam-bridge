@@ -32,6 +32,7 @@ pyinstaller --noconfirm --clean --onefile --windowed ^
   --collect-all sounddevice ^
   sender_gui.py
 if errorlevel 1 goto :err
+call "..\tools\sign.bat" "dist\CamBridge-Sender.exe" || goto :err
 
 echo.
 echo [3/3] Building CamBridge-Receiver.exe ...
@@ -43,6 +44,7 @@ pyinstaller --noconfirm --clean --onefile --windowed ^
   --collect-all pyvirtualcam ^
   receiver_gui.py
 if errorlevel 1 goto :err
+call "..\tools\sign.bat" "dist\CamBridge-Receiver.exe" || goto :err
 
 echo.
 echo ============================================================

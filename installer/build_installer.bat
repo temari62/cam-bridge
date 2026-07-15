@@ -32,10 +32,12 @@ if not exist "vendor\VBCABLE_Setup_x64.exe" (
 
 echo Building Receiver installer...
 "%ISCC%" "CamBridge-Receiver.iss" || goto :err
+call "..\tools\sign.bat" "Output\CamBridge-Receiver-Setup.exe" || goto :err
 
 if exist "..\client\dist\CamBridge-Sender.exe" (
   echo Building Sender installer...
   "%ISCC%" "CamBridge-Sender.iss" || goto :err
+  call "..\tools\sign.bat" "Output\CamBridge-Sender-Setup.exe" || goto :err
 ) else (
   echo (Skipping Sender installer - ..\client\dist\CamBridge-Sender.exe not found.)
 )

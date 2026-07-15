@@ -29,11 +29,14 @@ cam-bridge/
 │   ├─ CamBridge-Sender.iss     installs sender
 │   ├─ build_installer.bat      compiles the installers
 │   └─ vendor/                  drop VBCABLE_Setup_x64.exe here (see its README)
+├─ tools/
+│   └─ sign.bat            optional Authenticode signing helper (used by the build scripts)
 └─ docs/
     ├─ SETUP.md          step-by-step setup for every meeting (start here)
     ├─ DESIGN.md         architecture, tech choices, limitations
     ├─ BUILD.md          building the .exe files
-    └─ INSTALLER.md      building the one-click installers
+    ├─ INSTALLER.md      building the one-click installers
+    └─ SIGNING.md        optional code signing to remove SmartScreen warnings
 ```
 
 ## Quick start

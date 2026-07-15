@@ -41,9 +41,19 @@ driver installs.
 - **OBS bundling is optional.** If you don't include the OBS installer, install OBS on the remote
   PC yourself (SETUP.md Part A). It's left optional because OBS is large and you may prefer to
   manage it via your own software deployment.
-- **VB-CABLE silent flags** are `-i -h`. If a newer VB-CABLE changes them, edit the `[Run]` line in
+- **VB-CABLE silent flags** are `-i -h` (verified against VB-Audio's current reference manual;
+  uninstall is `-u -h`). If a future VB-CABLE changes them, edit the `[Run]` line in
   `installer\CamBridge-Receiver.iss`.
-- **Code signing:** the installer and exes are unsigned, so Windows SmartScreen may warn on first
-  run. For a fleet rollout, sign them with an authenticode certificate to avoid the prompt.
+- **One prompt may still appear.** Even with `-i -h`, Windows can still show its "Would you like to
+  install this device software?" driver-trust dialog the first time. To make it *fully* silent
+  across a fleet, pre-trust VB-Audio's publisher certificate on the target PC before installing —
+  export the certificate from `VBCABLE_Setup_x64.exe` (right-click → Properties → Digital
+  Signatures → Details → View Certificate → Copy to File) and import it into the machine's
+  Trusted Publishers store, e.g. `certutil -addstore TrustedPublisher vbaudio.cer` (run as admin,
+  e.g. via Group Policy or your MDM). This is optional — without it the employee just clicks
+  "Install" once.
+- **Code signing:** by default the installer and exes are unsigned, so Windows SmartScreen may warn
+  on first run. For a fleet rollout, configure a code-signing certificate and the build scripts sign
+  the apps **and** the installers automatically — see `SIGNING.md`.
 - **Redistribution:** make sure your use of the bundled VB-CABLE / OBS installers complies with
   their licenses. For internal company deployment this is normally fine; confirm for your case.

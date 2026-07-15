@@ -38,8 +38,8 @@ after that it's normal.
 ## Notes / troubleshooting
 
 - **Antivirus / SmartScreen** may warn on an unsigned exe the first time. It's expected
-  for self-built apps; click "More info → Run anyway", or code-sign the exe if you have
-  a certificate.
+  for self-built apps; click "More info → Run anyway", or **code-sign** the apps to remove the
+  warning — see `SIGNING.md` (the build scripts sign automatically once a cert is configured).
 - **64-bit:** build on 64-bit Windows so the exe runs on your (64-bit) employee PCs.
 - **Camera/mic not found at runtime** — that's a device/driver issue on the target PC,
   not a build issue; use the app's fields (or the CLI `--list-devices`) to pick the right one.

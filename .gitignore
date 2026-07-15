@@ -18,3 +18,8 @@ dist/
 installer/vendor/*.exe
 installer/vendor/*.pem
 installer/Output/
+
+# Code-signing certificates (never commit)
+*.pfx
+*.p12
+*.cer
