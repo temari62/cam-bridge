@@ -27,9 +27,12 @@ echo.
 echo [2/3] Building CamBridge-Sender.exe ...
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name CamBridge-Sender ^
+  --icon "..\assets\CamBridge.ico" ^
+  --add-data "..\assets\CamBridge.ico;assets" ^
   --collect-all cv2 ^
   --collect-all numpy ^
   --collect-all sounddevice ^
+  --collect-all sv_ttk ^
   sender_gui.py
 if errorlevel 1 goto :err
 call "..\tools\sign.bat" "dist\CamBridge-Sender.exe" || goto :err
@@ -38,10 +41,13 @@ echo.
 echo [3/3] Building CamBridge-Receiver.exe ...
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name CamBridge-Receiver ^
+  --icon "..\assets\CamBridge.ico" ^
+  --add-data "..\assets\CamBridge.ico;assets" ^
   --collect-all cv2 ^
   --collect-all numpy ^
   --collect-all sounddevice ^
   --collect-all pyvirtualcam ^
+  --collect-all sv_ttk ^
   receiver_gui.py
 if errorlevel 1 goto :err
 call "..\tools\sign.bat" "dist\CamBridge-Receiver.exe" || goto :err

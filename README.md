@@ -16,8 +16,9 @@ cam-bridge/
 ├─ client/              <- runs on the employee PCs (local + remote)
 │   ├─ sender.py            local PC: capture + stream out       (CLI)
 │   ├─ receiver.py          remote PC: stream in -> virtual devices (CLI)
-│   ├─ sender_gui.py        friendly window for the local PC
-│   ├─ receiver_gui.py      friendly window for the remote PC
+│   ├─ sender_gui.py        friendly window for the local PC (Windows 11 look)
+│   ├─ receiver_gui.py      friendly window for the remote PC (Windows 11 look)
+│   ├─ theme.py             shared Fluent theme + auto light/dark
 │   ├─ requirements.txt     Python dependencies
 │   ├─ build_exe.bat        build standalone .exe files (PyInstaller)
 │   └─ start_*.bat          double-click launchers (GUI + CLI)
@@ -29,6 +30,10 @@ cam-bridge/
 │   ├─ CamBridge-Sender.iss     installs sender
 │   ├─ build_installer.bat      compiles the installers
 │   └─ vendor/                  drop VBCABLE_Setup_x64.exe here (see its README)
+├─ assets/
+│   ├─ CamBridge.ico       app icon (multi-size: 16–256px) for the window, exe, installer
+│   ├─ CamBridge.png       1024px master icon
+│   └─ make_icon.py        regenerates the icon
 ├─ tools/
 │   └─ sign.bat            optional Authenticode signing helper (used by the build scripts)
 └─ docs/

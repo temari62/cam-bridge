@@ -1,7 +1,7 @@
 """
-CamBridge - REMOTE receiver GUI.
+CamBridge - REMOTE receiver GUI (Windows 11 / Fluent look).
 
-A tiny window for the remote PC: type the relay address + room token, tick TLS,
+A small window for the remote PC: type the relay address + room token, tick TLS,
 click Start. Then pick "OBS Virtual Camera" and "CABLE Output" in your meeting app.
 
     python receiver_gui.py
@@ -12,6 +12,8 @@ import os
 import queue
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
+
+import theme
 
 try:
     import receiver as core
@@ -24,6 +26,10 @@ except Exception as e:
 
 CONFIG = os.path.join(os.path.expanduser("~"), ".cambridge_receiver.json")
 _log_queue = queue.Queue()
+
+H1 = ("Segoe UI Semibold", 18)
+H2 = ("Segoe UI Semibold", 11)
+MONO = ("Cascadia Mono", 9)
 
 
 def gui_log(*args):
@@ -46,58 +52,87 @@ def save_cfg(cfg):
         pass
 
 
+def section(parent, title):
+    head = ttk.Frame(parent)
+    head.pack(fill="x", pady=(18, 8))
+    ttk.Label(head, text=title, font=H2).pack(anchor="w")
+    ttk.Separator(head).pack(fill="x", pady=(6, 0))
+
+
 class App:
     def __init__(self, root):
         self.root = root
         self.threads = []
         cfg = load_cfg()
 
-        root.title("CamBridge Receiver  (remote PC)")
-        root.geometry("560x500")
-        pad = {"padx": 8, "pady": 4}
+        root.title("CamBridge Receiver")
+        root.geometry("600x600")
+        root.minsize(560, 560)
+        self.mode = theme.apply(root)
+        theme.set_icon(root)
 
-        frm = ttk.Frame(root)
-        frm.pack(fill="x", **pad)
+        outer = ttk.Frame(root, padding=(24, 20))
+        outer.pack(fill="both", expand=True)
 
-        ttk.Label(frm, text="Relay server IP / domain:").grid(row=0, column=0, sticky="w")
-        self.host = ttk.Entry(frm, width=34)
-        self.host.grid(row=0, column=1, columnspan=2, sticky="we")
+        ttk.Label(outer, text="CamBridge Receiver", font=H1).pack(anchor="w")
+        ttk.Label(outer, text="Feed the sender's camera and mic into this PC's virtual devices.",
+                  foreground=theme.IDLE_GRAY).pack(anchor="w")
+
+        # --- Connection ---
+        section(outer, "Connection")
+        conn = ttk.Frame(outer)
+        conn.pack(fill="x")
+        conn.columnconfigure(1, weight=1)
+
+        ttk.Label(conn, text="Relay server").grid(row=0, column=0, sticky="w", pady=6, padx=(0, 14))
+        self.host = ttk.Entry(conn)
+        self.host.grid(row=0, column=1, columnspan=2, sticky="we", pady=6)
         self.host.insert(0, cfg.get("host", ""))
 
-        ttk.Label(frm, text="Room token:").grid(row=1, column=0, sticky="w")
-        self.room = ttk.Entry(frm, width=34)
-        self.room.grid(row=1, column=1, columnspan=2, sticky="we")
+        ttk.Label(conn, text="Room token").grid(row=1, column=0, sticky="w", pady=6, padx=(0, 14))
+        self.room = ttk.Entry(conn)
+        self.room.grid(row=1, column=1, columnspan=2, sticky="we", pady=6)
         self.room.insert(0, cfg.get("room", "default"))
 
         self.tls = tk.BooleanVar(value=cfg.get("tls", True))
-        ttk.Checkbutton(frm, text="Encrypt (TLS)", variable=self.tls,
-                        command=self._toggle_tls).grid(row=2, column=0, sticky="w")
+        ttk.Checkbutton(conn, text="Encrypt (TLS)", style="Switch.TCheckbutton",
+                        variable=self.tls, command=self._toggle_tls
+                        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(10, 2))
         self.insecure = tk.BooleanVar(value=cfg.get("insecure", False))
-        self.insecure_cb = ttk.Checkbutton(frm, text="Skip cert check", variable=self.insecure)
-        self.insecure_cb.grid(row=2, column=1, sticky="w")
+        self.insecure_cb = ttk.Checkbutton(conn, text="Skip certificate check",
+                                            style="Switch.TCheckbutton", variable=self.insecure)
+        self.insecure_cb.grid(row=3, column=0, columnspan=2, sticky="w", pady=(0, 4))
 
-        ttk.Label(frm, text="Cert file (optional):").grid(row=3, column=0, sticky="w")
-        self.cafile = ttk.Entry(frm, width=26)
-        self.cafile.grid(row=3, column=1, sticky="we")
+        ttk.Label(conn, text="Cert file").grid(row=4, column=0, sticky="w", pady=6, padx=(0, 14))
+        self.cafile = ttk.Entry(conn)
+        self.cafile.grid(row=4, column=1, sticky="we", pady=6)
         self.cafile.insert(0, cfg.get("cafile", ""))
-        self.browse_btn = ttk.Button(frm, text="Browse", command=self._browse)
-        self.browse_btn.grid(row=3, column=2, sticky="e")
+        self.browse_btn = ttk.Button(conn, text="Browse", width=9, command=self._browse)
+        self.browse_btn.grid(row=4, column=2, sticky="e", padx=(8, 0))
 
-        hint = ("In your meeting app choose:  Camera = OBS Virtual Camera,  "
-                "Microphone = CABLE Output.")
-        ttk.Label(root, text=hint, wraplength=540, foreground="#555").pack(fill="x", **pad)
+        # --- Meeting-app hint ---
+        section(outer, "In your meeting app")
+        ttk.Label(outer, text="Camera  =  OBS Virtual Camera", font=H2).pack(anchor="w")
+        ttk.Label(outer, text="Microphone  =  CABLE Output", font=H2).pack(anchor="w", pady=(2, 0))
 
-        btns = ttk.Frame(root)
-        btns.pack(fill="x", **pad)
-        self.start_btn = ttk.Button(btns, text="Start", command=self.start)
+        # --- Action bar ---
+        bar = ttk.Frame(outer)
+        bar.pack(fill="x", pady=(22, 8))
+        self.start_btn = ttk.Button(bar, text="Start", style="Accent.TButton", command=self.start)
         self.start_btn.pack(side="left")
-        self.stop_btn = ttk.Button(btns, text="Stop", command=self.stop, state="disabled")
-        self.stop_btn.pack(side="left", padx=6)
-        self.status = ttk.Label(btns, text="Idle")
-        self.status.pack(side="right")
+        self.stop_btn = ttk.Button(bar, text="Stop", command=self.stop, state="disabled")
+        self.stop_btn.pack(side="left", padx=8)
+        self.dot = ttk.Label(bar, text="●", foreground=theme.IDLE_GRAY, font=("Segoe UI", 12))
+        self.dot.pack(side="right")
+        self.status = ttk.Label(bar, text="Idle")
+        self.status.pack(side="right", padx=(0, 6))
 
-        self.logbox = scrolledtext.ScrolledText(root, height=15, state="disabled")
-        self.logbox.pack(fill="both", expand=True, **pad)
+        # --- Log ---
+        ttk.Label(outer, text="Status log", foreground=theme.IDLE_GRAY).pack(anchor="w")
+        self.logbox = scrolledtext.ScrolledText(outer, height=8, state="disabled",
+                                                font=MONO, relief="flat", borderwidth=0)
+        self.logbox.pack(fill="both", expand=True, pady=(4, 0))
+        theme.style_log(self.logbox)
 
         core.log = gui_log
         self._toggle_tls()
@@ -126,6 +161,10 @@ class App:
             self.logbox.configure(state="disabled")
         self.root.after(150, self._drain)
 
+    def _set_status(self, text, color):
+        self.status.configure(text=text)
+        self.dot.configure(foreground=color)
+
     def start(self):
         host = self.host.get().strip()
         room = self.room.get().strip() or "default"
@@ -144,14 +183,14 @@ class App:
             return
         self.start_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
-        self.status.configure(text="Running")
+        self._set_status("Running", theme.OK_GREEN)
         gui_log("--- started ---")
 
     def stop(self):
         core.stop()
         self.start_btn.configure(state="normal")
         self.stop_btn.configure(state="disabled")
-        self.status.configure(text="Idle")
+        self._set_status("Idle", theme.IDLE_GRAY)
         gui_log("--- stopped ---")
 
     def _on_close(self):

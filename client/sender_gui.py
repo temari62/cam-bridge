@@ -1,7 +1,7 @@
 """
-CamBridge - LOCAL sender GUI.
+CamBridge - LOCAL sender GUI (Windows 11 / Fluent look).
 
-A tiny window for employees: type the relay address + room token, tick TLS,
+A small window for employees: type the relay address + room token, tick TLS,
 click Start. Runs on the LOCAL PC. No command line needed.
 
     python sender_gui.py
@@ -10,9 +10,10 @@ click Start. Runs on the LOCAL PC. No command line needed.
 import json
 import os
 import queue
-import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
+
+import theme
 
 try:
     import sender as core
@@ -25,6 +26,10 @@ except Exception as e:  # cv2 / sounddevice missing, etc.
 
 CONFIG = os.path.join(os.path.expanduser("~"), ".cambridge_sender.json")
 _log_queue = queue.Queue()
+
+H1 = ("Segoe UI Semibold", 18)
+H2 = ("Segoe UI Semibold", 11)
+MONO = ("Cascadia Mono", 9)
 
 
 def gui_log(*args):
@@ -47,74 +52,104 @@ def save_cfg(cfg):
         pass
 
 
+def section(parent, title):
+    """A flat section header (bold label + hairline) on the shared background."""
+    head = ttk.Frame(parent)
+    head.pack(fill="x", pady=(18, 8))
+    ttk.Label(head, text=title, font=H2).pack(anchor="w")
+    ttk.Separator(head).pack(fill="x", pady=(6, 0))
+
+
 class App:
     def __init__(self, root):
         self.root = root
         self.threads = []
-        self.running = False
         cfg = load_cfg()
 
-        root.title("CamBridge Sender  (local PC)")
-        root.geometry("560x520")
-        pad = {"padx": 8, "pady": 4}
+        root.title("CamBridge Sender")
+        root.geometry("600x620")
+        root.minsize(560, 580)
+        self.mode = theme.apply(root)
+        theme.set_icon(root)
 
-        frm = ttk.Frame(root)
-        frm.pack(fill="x", **pad)
+        outer = ttk.Frame(root, padding=(24, 20))
+        outer.pack(fill="both", expand=True)
 
-        ttk.Label(frm, text="Relay server IP / domain:").grid(row=0, column=0, sticky="w")
-        self.host = ttk.Entry(frm, width=34)
-        self.host.grid(row=0, column=1, columnspan=2, sticky="we")
+        ttk.Label(outer, text="CamBridge Sender", font=H1).pack(anchor="w")
+        ttk.Label(outer, text="Send this PC's camera and microphone to the meeting PC.",
+                  foreground=theme.IDLE_GRAY).pack(anchor="w")
+
+        # --- Connection ---
+        section(outer, "Connection")
+        conn = ttk.Frame(outer)
+        conn.pack(fill="x")
+        conn.columnconfigure(1, weight=1)
+
+        ttk.Label(conn, text="Relay server").grid(row=0, column=0, sticky="w", pady=6, padx=(0, 14))
+        self.host = ttk.Entry(conn)
+        self.host.grid(row=0, column=1, columnspan=2, sticky="we", pady=6)
         self.host.insert(0, cfg.get("host", ""))
 
-        ttk.Label(frm, text="Room token:").grid(row=1, column=0, sticky="w")
-        self.room = ttk.Entry(frm, width=34)
-        self.room.grid(row=1, column=1, columnspan=2, sticky="we")
+        ttk.Label(conn, text="Room token").grid(row=1, column=0, sticky="w", pady=6, padx=(0, 14))
+        self.room = ttk.Entry(conn)
+        self.room.grid(row=1, column=1, columnspan=2, sticky="we", pady=6)
         self.room.insert(0, cfg.get("room", "default"))
 
         self.tls = tk.BooleanVar(value=cfg.get("tls", True))
-        ttk.Checkbutton(frm, text="Encrypt (TLS)", variable=self.tls,
-                        command=self._toggle_tls).grid(row=2, column=0, sticky="w")
+        ttk.Checkbutton(conn, text="Encrypt (TLS)", style="Switch.TCheckbutton",
+                        variable=self.tls, command=self._toggle_tls
+                        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(10, 2))
         self.insecure = tk.BooleanVar(value=cfg.get("insecure", False))
-        self.insecure_cb = ttk.Checkbutton(frm, text="Skip cert check", variable=self.insecure)
-        self.insecure_cb.grid(row=2, column=1, sticky="w")
+        self.insecure_cb = ttk.Checkbutton(conn, text="Skip certificate check",
+                                            style="Switch.TCheckbutton", variable=self.insecure)
+        self.insecure_cb.grid(row=3, column=0, columnspan=2, sticky="w", pady=(0, 4))
 
-        ttk.Label(frm, text="Cert file (optional):").grid(row=3, column=0, sticky="w")
-        self.cafile = ttk.Entry(frm, width=26)
-        self.cafile.grid(row=3, column=1, sticky="we")
+        ttk.Label(conn, text="Cert file").grid(row=4, column=0, sticky="w", pady=6, padx=(0, 14))
+        self.cafile = ttk.Entry(conn)
+        self.cafile.grid(row=4, column=1, sticky="we", pady=6)
         self.cafile.insert(0, cfg.get("cafile", ""))
-        self.browse_btn = ttk.Button(frm, text="Browse", command=self._browse)
-        self.browse_btn.grid(row=3, column=2, sticky="e")
+        self.browse_btn = ttk.Button(conn, text="Browse", width=9, command=self._browse)
+        self.browse_btn.grid(row=4, column=2, sticky="e", padx=(8, 0))
 
-        adv = ttk.LabelFrame(root, text="Advanced (optional)")
-        adv.pack(fill="x", **pad)
-        ttk.Label(adv, text="Camera #").grid(row=0, column=0, sticky="w")
+        # --- Advanced ---
+        section(outer, "Advanced")
+        adv = ttk.Frame(outer)
+        adv.pack(fill="x")
+        ttk.Label(adv, text="Camera #").grid(row=0, column=0, sticky="w", padx=(0, 8))
         self.camera = ttk.Entry(adv, width=6)
-        self.camera.grid(row=0, column=1, sticky="w")
+        self.camera.grid(row=0, column=1, sticky="w", padx=(0, 18))
         self.camera.insert(0, str(cfg.get("camera", 0)))
-        ttk.Label(adv, text="Width").grid(row=0, column=2, sticky="w")
-        self.width = ttk.Entry(adv, width=6)
-        self.width.grid(row=0, column=3, sticky="w")
+        ttk.Label(adv, text="Width").grid(row=0, column=2, sticky="w", padx=(0, 8))
+        self.width = ttk.Entry(adv, width=7)
+        self.width.grid(row=0, column=3, sticky="w", padx=(0, 18))
         self.width.insert(0, str(cfg.get("width", 1280)))
-        ttk.Label(adv, text="Height").grid(row=0, column=4, sticky="w")
-        self.height = ttk.Entry(adv, width=6)
-        self.height.grid(row=0, column=5, sticky="w")
+        ttk.Label(adv, text="Height").grid(row=0, column=4, sticky="w", padx=(0, 8))
+        self.height = ttk.Entry(adv, width=7)
+        self.height.grid(row=0, column=5, sticky="w", padx=(0, 18))
         self.height.insert(0, str(cfg.get("height", 720)))
-        ttk.Label(adv, text="FPS").grid(row=0, column=6, sticky="w")
-        self.fps = ttk.Entry(adv, width=5)
+        ttk.Label(adv, text="FPS").grid(row=0, column=6, sticky="w", padx=(0, 8))
+        self.fps = ttk.Entry(adv, width=6)
         self.fps.grid(row=0, column=7, sticky="w")
         self.fps.insert(0, str(cfg.get("fps", 30)))
 
-        btns = ttk.Frame(root)
-        btns.pack(fill="x", **pad)
-        self.start_btn = ttk.Button(btns, text="Start", command=self.start)
+        # --- Action bar ---
+        bar = ttk.Frame(outer)
+        bar.pack(fill="x", pady=(22, 8))
+        self.start_btn = ttk.Button(bar, text="Start", style="Accent.TButton", command=self.start)
         self.start_btn.pack(side="left")
-        self.stop_btn = ttk.Button(btns, text="Stop", command=self.stop, state="disabled")
-        self.stop_btn.pack(side="left", padx=6)
-        self.status = ttk.Label(btns, text="Idle")
-        self.status.pack(side="right")
+        self.stop_btn = ttk.Button(bar, text="Stop", command=self.stop, state="disabled")
+        self.stop_btn.pack(side="left", padx=8)
+        self.dot = ttk.Label(bar, text="●", foreground=theme.IDLE_GRAY, font=("Segoe UI", 12))
+        self.dot.pack(side="right")
+        self.status = ttk.Label(bar, text="Idle")
+        self.status.pack(side="right", padx=(0, 6))
 
-        self.logbox = scrolledtext.ScrolledText(root, height=15, state="disabled")
-        self.logbox.pack(fill="both", expand=True, **pad)
+        # --- Log ---
+        ttk.Label(outer, text="Status log", foreground=theme.IDLE_GRAY).pack(anchor="w")
+        self.logbox = scrolledtext.ScrolledText(outer, height=8, state="disabled",
+                                                font=MONO, relief="flat", borderwidth=0)
+        self.logbox.pack(fill="both", expand=True, pady=(4, 0))
+        theme.style_log(self.logbox)
 
         core.log = gui_log
         self._toggle_tls()
@@ -149,6 +184,10 @@ class App:
         except ValueError:
             return default
 
+    def _set_status(self, text, color):
+        self.status.configure(text=text)
+        self.dot.configure(foreground=color)
+
     def start(self):
         host = self.host.get().strip()
         room = self.room.get().strip() or "default"
@@ -171,18 +210,16 @@ class App:
         except Exception as e:
             messagebox.showerror("CamBridge", f"Could not start:\n{e}")
             return
-        self.running = True
         self.start_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
-        self.status.configure(text="Running")
+        self._set_status("Running", theme.OK_GREEN)
         gui_log("--- started ---")
 
     def stop(self):
         core.stop()
-        self.running = False
         self.start_btn.configure(state="normal")
         self.stop_btn.configure(state="disabled")
-        self.status.configure(text="Idle")
+        self._set_status("Idle", theme.IDLE_GRAY)
         gui_log("--- stopped ---")
 
     def _on_close(self):

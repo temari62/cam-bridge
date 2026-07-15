@@ -23,3 +23,7 @@ installer/Output/
 *.pfx
 *.p12
 *.cer
+
+# Icon scratch renders
+assets/proof_*.png
+assets/preview_*.png
