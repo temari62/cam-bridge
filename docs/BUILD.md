@@ -21,6 +21,9 @@ Windows machine. So run the build on any Windows 11 PC with Python 3.10+ install
 First launch of a onefile exe is a few seconds slower (it unpacks to a temp folder);
 after that it's normal.
 
+To publish a version that installed apps pick up automatically, see **RELEASE.md**
+(`python toolselease.py` builds everything and uploads it to GitHub Releases).
+
 ## Distributing to employees
 
 Easiest is the installer (`INSTALLER.md`), which handles both PCs. To copy the exe by hand:

@@ -201,13 +201,49 @@ def stop():
 
 
 # --- Utilities -----------------------------------------------------------------
-def list_devices():
-    print("=== CAMERAS (try indexes 0,1,2 ... with --camera) ===")
-    for i in range(6):
+def _windows_camera_names():
+    """Friendly names of the PC's cameras from Plug and Play (Windows only), or []."""
+    import subprocess
+    try:
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "Get-PnpDevice -Class Camera,Image -Status OK | "
+             "Select-Object -ExpandProperty FriendlyName"],
+            capture_output=True, text=True, timeout=20,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
+    except Exception:
+        return []
+
+
+def list_cameras(max_index=6):
+    """Return [(index, label)] for cameras OpenCV can open.
+
+    OpenCV only knows cameras by DirectShow index. When Windows reports the same
+    number of camera devices, their names are paired with the indexes in order
+    (exact for the usual single-webcam PC); otherwise generic labels are used."""
+    try:  # optional: exact DirectShow names in OpenCV's index order
+        from pygrabber.dshow_graph import FilterGraph
+        names = FilterGraph().get_input_devices()
+        return [(i, f"{i}: {n}") for i, n in enumerate(names)]
+    except Exception:
+        pass
+    found = []
+    for i in range(max_index):
         cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
         if cap.isOpened():
-            print(f"  camera index {i}: available")
-            cap.release()
+            found.append(i)
+        cap.release()
+    names = _windows_camera_names()
+    if len(names) != len(found):
+        names = [f"Camera {i}" for i in found]
+    return [(i, f"{i}: {n}") for i, n in zip(found, names)]
+
+
+def list_devices():
+    print("=== CAMERAS (use --camera <index>) ===")
+    for i, label in list_cameras():
+        print(f"  {label}")
     print("\n=== AUDIO INPUT DEVICES (use --mic <index>) ===")
     for i, d in enumerate(sd.query_devices()):
         if d["max_input_channels"] > 0:

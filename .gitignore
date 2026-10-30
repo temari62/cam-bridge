@@ -19,6 +19,7 @@ dist/
 installer/vendor/*.exe
 installer/vendor/*.pem
 installer/vendor/obs-virtualcam/
+installer/vendor/VBCABLE_Driver_Pack*/
 installer/Output/
 
 # Code-signing certificates (never commit)

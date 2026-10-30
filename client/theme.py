@@ -19,6 +19,7 @@ from tkinter import ttk
 ACCENT = "#0067C0"
 OK_GREEN = "#2EA043"
 IDLE_GRAY = "#8A8A8A"
+IDLE_YELLOW = "#F2B705"
 ERR_RED = "#D13438"
 
 # Filled in by apply(); safe defaults for import-time use.
@@ -31,6 +32,7 @@ _BACKING_STYLES = (
     "TFrame", "TLabel", "TButton", "Accent.TButton", "Toolbutton",
     "TCheckbutton", "Switch.TCheckbutton", "TRadiobutton",
     "TSeparator", "TEntry", "TLabelframe", "TLabelframe.Label",
+    "TNotebook", "TNotebook.Tab",
 )
 
 
@@ -108,15 +110,36 @@ def apply(root):
     except Exception:
         pass  # fall back to default ttk theme
     _match_backgrounds(root, dark)
+    _fix_text_fields(dark)
     _set_titlebar_dark(root, dark)
     return mode
+
+
+def _fix_text_fields(dark):
+    """Visible caret + selection in entries (dark mode otherwise draws them black),
+    and a larger primary-button style for the Send / Receive buttons."""
+    style = ttk.Style()
+    fg = "#fafafa" if dark else "#1c1c1c"
+    try:
+        style.configure("TEntry", insertcolor=fg, selectbackground=ACCENT,
+                        selectforeground="#ffffff")
+        style.configure("TCombobox", insertcolor=fg, selectbackground=ACCENT,
+                        selectforeground="#ffffff")
+    except Exception:
+        pass
+    try:
+        style.configure("Big.Accent.TButton", font=("Segoe UI Semibold", 12),
+                        padding=(24, 10))
+    except Exception:
+        pass
 
 
 def style_log(text_widget):
     """Theme a tk Text/ScrolledText log widget to match the current mode."""
     try:
         text_widget.configure(background=LOG_BG, foreground=LOG_FG,
-                              insertbackground=LOG_FG, highlightthickness=0,
+                              insertbackground=LOG_FG, selectbackground=ACCENT,
+                              selectforeground="#ffffff", highlightthickness=0,
                               borderwidth=0, relief="flat")
     except Exception:
         pass

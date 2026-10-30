@@ -41,6 +41,7 @@ cam-bridge/
     ├─ DESIGN.md         architecture, tech choices, limitations
     ├─ BUILD.md          building the .exe files
     ├─ INSTALLER.md      building the one-click installers
+    ├─ RELEASE.md        publishing a release so installed apps auto-update
     └─ SIGNING.md        optional code signing to remove SmartScreen warnings
 ```
 

@@ -6,10 +6,12 @@ They get bundled into CamBridge-Setup.exe and installed silently on remote PCs.
 
 REQUIRED
 --------
-VBCABLE_Setup_x64.exe   (VB-Audio Virtual Cable - the virtual microphone)
+VBCABLE_Driver_Pack45\   (VB-Audio Virtual Cable - the virtual microphone)
   1. Download the ZIP from https://vb-audio.com/Cable/
-  2. Unzip it.
-  3. Copy "VBCABLE_Setup_x64.exe" into THIS folder.
+  2. Unzip the WHOLE pack into a folder named "VBCABLE_Driver_Pack45" here.
+     The setup exe needs the .inf/.sys/.cat driver files beside it, so the
+     entire folder is bundled. (Newer pack? Update VBCablePack in
+     CamBridge-Setup.iss and the check in build_installer.bat.)
 
 obs-virtualcam\   (the virtual camera - fetched automatically)
   build_installer.bat runs ..\fetch_obs_virtualcam.py if this folder is

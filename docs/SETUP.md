@@ -46,9 +46,10 @@ Choose a hard-to-guess shared word/phrase per employee (e.g. `jose-standup-7fKq`
 remote PC must use the **same** token to be paired. Anyone who knows the relay IP *and* the token
 could connect, so treat it like a password.
 
-### 5. (Recommended) Turn on encryption (TLS)
-Without this, the video/audio crosses the internet unencrypted. To encrypt it, make a certificate
-on the VPS (replace the IP with your VPS's public IP):
+### 5. Turn on encryption (TLS) — required by the app
+The CamBridge app always encrypts the connection and verifies the relay with a certificate, so
+make one on the VPS (replace the IP with your VPS's public IP — it must be exactly what you type
+into the app's "Relay server" box):
 ```
 bash gen_cert.sh 203.0.113.10
 ```
@@ -56,10 +57,17 @@ This creates `relay-cert.pem` and `relay-key.pem`. Start the relay with TLS inst
 ```
 python3 relay.py --tls --certfile relay-cert.pem --keyfile relay-key.pem
 ```
-Then copy **`relay-cert.pem`** to each PC — you'll point the app at it (the "Cert file" box in the
-GUI, or `--cafile relay-cert.pem`). That gives you an encrypted **and** verified connection.
-(If you'd rather not bother with the cert file, you can instead tick **"Skip cert check"** / pass
-`--insecure`: still encrypted, but it won't detect an impostor relay.)
+Then copy **`relay-cert.pem`** to each PC (keep `relay-key.pem` on the server only). From
+PowerShell on the PC:
+```
+scp root@203.0.113.10:/root/relay/relay-cert.pem D:elay-cert.pem
+```
+In the app, click **Browse** next to "Cert file" and pick it. (The command-line tools can still run
+without TLS or with `--insecure`; the GUI cannot.)
+
+> Only one relay can run at a time. If you see `Address already in use`, an older copy is still
+> running — find it with `ss -ltnp | grep 5000` and stop it with `pkill -f relay.py`. A relay
+> started *without* `--tls` makes the app report `SSL: UNEXPECTED_EOF` / `forcibly closed`.
 
 ---
 
@@ -127,14 +135,15 @@ automatically if the connection drops.
 ## Part D — Running it (every meeting)
 
 **Easiest way — the CamBridge app (no command line).** Both PCs run the same app
-(**CamBridge** from the Start menu, or `start_gui.bat` in the `client` folder). Under **This PC**
-choose **Send** or **Receive**, fill in the relay IP and room token, tick **Encrypt (TLS)** (and
-point "Cert file" at `relay-cert.pem` from Part 0 step 5), then click **Start**. The window shows a
-live status log; click **Stop** when done. It remembers your mode and last entries.
+(**CamBridge** from the Start menu, or `start_gui.bat` in the `client` folder). Fill in the relay
+IP, room token and the **Cert file** (`relay-cert.pem` from Part 0 step 5), then click **Send** on
+the PC you sit at or **Receive** on the meeting PC. The window shows a live status log; click the
+same button (now **Stop**) when done. It remembers your last entries. The **?** button opens this
+guide inside the app.
 
 ### On the REMOTE PC
-1. Open **CamBridge** and choose **Receive into the meeting**. Enter the **relay IP** and **room token**, set TLS,
-   click **Start**. Wait for `virtual camera started` / `output ready` in the log.
+1. Open **CamBridge**, enter the **relay IP**, **room token** and **cert file**, click **Receive**.
+   Wait for `virtual camera started` / `output ready` in the log.
    (Command-line alternative: `python receiver.py --host <RELAY_IP> --room <TOKEN> --tls --cafile relay-cert.pem`.)
 2. Open your meeting app and set devices:
    - **Teams:** Settings → Devices → Camera = **OBS Virtual Camera**, Microphone = **CABLE Output (VB-Audio Virtual Cable)**.
@@ -143,8 +152,8 @@ live status log; click **Stop** when done. It remembers your mode and last entri
 3. Join the meeting.
 
 ### On the LOCAL PC
-1. Open **CamBridge** and choose **Send my camera + mic**. Enter the **same relay IP**, **same room token**, and the
-   same TLS settings, then click **Start**.
+1. Open **CamBridge**, enter the **same relay IP**, **same room token** and the cert file, then
+   click **Send**.
    (Command-line alternative: `python sender.py --host <RELAY_IP> --room <TOKEN> --tls --cafile relay-cert.pem`.)
 2. The webcam light turns on and the remote PC's virtual camera starts showing your face.
 

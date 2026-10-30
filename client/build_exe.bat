@@ -18,7 +18,7 @@ python -m pip install -r requirements.txt
 python -m pip install pyinstaller
 if errorlevel 1 (
   echo ERROR: could not install dependencies. Is Python on PATH?
-  pause
+  if not defined NOPAUSE pause
   exit /b 1
 )
 
@@ -43,11 +43,11 @@ echo  DONE. Your executable is in the dist\ folder:
 echo     dist\CamBridge.exe
 echo  Copy relay-cert.pem next to the exe if you use TLS.
 echo ============================================================
-pause
+if not defined NOPAUSE pause
 exit /b 0
 
 :err
 echo.
 echo BUILD FAILED. Scroll up for the PyInstaller error.
-pause
+if not defined NOPAUSE pause
 exit /b 1

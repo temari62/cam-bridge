@@ -9,7 +9,7 @@
 ;  Build with Inno Setup 6:  see build_installer.bat
 ;  Requires, before compiling:
 ;    ..\client\dist\CamBridge.exe          (run build_exe.bat first)
-;    vendor\VBCABLE_Setup_x64.exe          (download - see vendor\README.txt)
+;    vendor\VBCABLE_Driver_Pack45\*        (download - see vendor\README.txt)
 ;    vendor\obs-virtualcam\*               (run fetch_obs_virtualcam.py)
 ;
 ;  Silent install:  CamBridge-Setup.exe /VERYSILENT /TASKS="remotepc"   (remote PC)
@@ -17,9 +17,13 @@
 ; ============================================================================
 
 #define AppName "CamBridge"
-#define AppVersion "1.0"
+; Version comes from ..\client\version.py via build_installer.bat (/DAppVersion=x.y.z).
+#ifndef AppVersion
+  #define AppVersion "0.0.0"
+#endif
 #define AppPublisher "NovaWave"
 #define ExeName "CamBridge.exe"
+#define VBCablePack "VBCABLE_Driver_Pack45"
 
 [Setup]
 ; Fixed AppId so upgrades find this install; never change it.
@@ -48,8 +52,9 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 
 [Files]
 Source: "..\client\dist\{#ExeName}"; DestDir: "{app}"; Flags: ignoreversion
-; Bundled driver installer, copied to a temp dir and removed after install:
-Source: "vendor\VBCABLE_Setup_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Tasks: remotepc
+; Bundled VB-CABLE driver pack (the setup exe needs the .inf/.sys/.cat files beside it),
+; copied to a temp dir and removed after install:
+Source: "vendor\{#VBCablePack}\*"; DestDir: "{tmp}\vbcable"; Flags: deleteafterinstall; Tasks: remotepc
 ; OBS Virtual Camera module (GPLv2, signed by OBS Project) - registered in [Run] below.
 ; restartreplace/uninsrestartdelete: a meeting app may have the DLL loaded.
 Source: "vendor\obs-virtualcam\obs-virtualcam-module64.dll"; DestDir: "{app}\virtualcam"; Flags: ignoreversion restartreplace uninsrestartdelete; Tasks: remotepc
@@ -65,7 +70,7 @@ Name: "{autodesktop}\CamBridge"; Filename: "{app}\{#ExeName}"; Tasks: desktopico
 
 [Run]
 ; 1) Install VB-Audio Virtual Cable silently (installer is elevated, so this is too).
-Filename: "{tmp}\VBCABLE_Setup_x64.exe"; Parameters: "-i -h"; \
+Filename: "{tmp}\vbcable\VBCABLE_Setup_x64.exe"; Parameters: "-i -h"; WorkingDir: "{tmp}\vbcable"; \
   StatusMsg: "Installing VB-Audio Virtual Cable (virtual microphone)..."; \
   Flags: waituntilterminated; Tasks: remotepc
 ; 2) Register the virtual camera (64-bit and 32-bit), as OBS's virtualcam-install.bat does.
@@ -76,7 +81,10 @@ Filename: "{sys}\regsvr32.exe"; Parameters: "/i /s ""{app}\virtualcam\obs-virtua
 Filename: "{syswow64}\regsvr32.exe"; Parameters: "/i /s ""{app}\virtualcam\obs-virtualcam-module32.dll"""; \
   StatusMsg: "Registering virtual camera..."; \
   Flags: runhidden waituntilterminated; Tasks: remotepc; Check: ShouldRegisterVCam
-; 3) Offer to launch the app, opened in the mode that fits this PC.
+; 3) Self-update (the app runs setup with /VERYSILENT /UPDATE=1): relaunch the app
+;    as the logged-on user once the new files are in place.
+Filename: "{app}\{#ExeName}"; Flags: nowait runasoriginaluser; Check: IsUpdateRun
+; 4) Offer to launch the app, opened in the mode that fits this PC.
 Filename: "{app}\{#ExeName}"; Parameters: "--mode receive"; Description: "Launch CamBridge"; \
   Flags: postinstall nowait skipifsilent; Tasks: remotepc
 Filename: "{app}\{#ExeName}"; Parameters: "--mode send"; Description: "Launch CamBridge"; \
@@ -88,6 +96,12 @@ FinishedLabel=Setup installed CamBridge.%n%nOn the PC you sit at, choose "Send" 
 FinishedRestartLabel=Setup installed CamBridge and the virtual devices. A restart is required to finish installing the virtual microphone.%n%nAfter restarting, open CamBridge, choose "Receive", then pick "OBS Virtual Camera" and "CABLE Output" in your meeting app.
 
 [Code]
+// True when started by the app's self-updater (CamBridge.exe passes /UPDATE=1).
+function IsUpdateRun: Boolean;
+begin
+  Result := ExpandConstant('{param:UPDATE|0}') = '1';
+end;
+
 const
   // CLSID of the OBS Virtual Camera DirectShow filter (pyvirtualcam checks for this key).
   VCamKey = 'SOFTWARE\Classes\CLSID\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}\InprocServer32';

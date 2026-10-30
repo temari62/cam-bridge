@@ -11,3 +11,5 @@ sounddevice>=0.4.6
 # The OBS Virtual Camera must be registered (installer or tools\virtualcam.bat;
 # OBS Studio itself is not required).
 pyvirtualcam>=0.11
+# Optional (sender PC): exact camera names in the GUI's camera dropdown.
+# pygrabber>=0.2
