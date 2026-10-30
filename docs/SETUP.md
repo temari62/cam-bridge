@@ -69,11 +69,21 @@ GUI, or `--cafile relay-cert.pem`). That gives you an encrypted **and** verified
 Install **Python 3.10 or newer** from https://www.python.org/downloads/ .
 On the first installer screen, tick **"Add python.exe to PATH"**.
 
-### 2. Install the virtual **camera** (OBS Studio)
-Download and install **OBS Studio** (free): https://obsproject.com/ .
-You do **not** need to configure OBS — just installing it registers the
-"OBS Virtual Camera" device that CamBridge writes into.
-(Optional: open OBS once, click **Start Virtual Camera**, then close it, to confirm it works.)
+### 2. Install the virtual **camera** (no OBS Studio needed)
+> Using `CamBridge-Setup.exe` (with "virtual camera + microphone" ticked)? It does this step (and
+> step 3) for you — skip ahead.
+
+CamBridge only needs OBS's small virtual-camera module, not OBS Studio. On a PC with the repo:
+```
+python installer\fetch_obs_virtualcam.py
+```
+then, in a Command Prompt **run as administrator**:
+```
+tools\virtualcam.bat install
+```
+This copies two DLLs to `C:\Program Files\CamBridge\virtualcam` and registers the
+**"OBS Virtual Camera"** device that CamBridge writes into (`tools\virtualcam.bat uninstall`
+removes it). If OBS Studio is already installed you can skip this — it provides the same device.
 
 ### 3. Install the virtual **microphone** (VB-CABLE)
 Download **VB-Audio Virtual Cable** (free): https://vb-audio.com/Cable/ .
@@ -116,13 +126,14 @@ automatically if the connection drops.
 
 ## Part D — Running it (every meeting)
 
-**Easiest way — the GUI (no command line).** Each PC has a little app: fill in the relay IP and
-room token, tick **Encrypt (TLS)** (and point "Cert file" at `relay-cert.pem` from Part 0 step 5),
-then click **Start**. The window shows a live status log; click **Stop** when done. It remembers
-your last entries.
+**Easiest way — the CamBridge app (no command line).** Both PCs run the same app
+(**CamBridge** from the Start menu, or `start_gui.bat` in the `client` folder). Under **This PC**
+choose **Send** or **Receive**, fill in the relay IP and room token, tick **Encrypt (TLS)** (and
+point "Cert file" at `relay-cert.pem` from Part 0 step 5), then click **Start**. The window shows a
+live status log; click **Stop** when done. It remembers your mode and last entries.
 
 ### On the REMOTE PC
-1. Double-click **`start_receiver_gui.bat`** (in the `client` folder). Enter the **relay IP** and **room token**, set TLS,
+1. Open **CamBridge** and choose **Receive into the meeting**. Enter the **relay IP** and **room token**, set TLS,
    click **Start**. Wait for `virtual camera started` / `output ready` in the log.
    (Command-line alternative: `python receiver.py --host <RELAY_IP> --room <TOKEN> --tls --cafile relay-cert.pem`.)
 2. Open your meeting app and set devices:
@@ -132,7 +143,7 @@ your last entries.
 3. Join the meeting.
 
 ### On the LOCAL PC
-1. Double-click **`start_sender_gui.bat`** (in the `client` folder). Enter the **same relay IP**, **same room token**, and the
+1. Open **CamBridge** and choose **Send my camera + mic**. Enter the **same relay IP**, **same room token**, and the
    same TLS settings, then click **Start**.
    (Command-line alternative: `python sender.py --host <RELAY_IP> --room <TOKEN> --tls --cafile relay-cert.pem`.)
 2. The webcam light turns on and the remote PC's virtual camera starts showing your face.
@@ -149,8 +160,14 @@ That's it — the meeting now shows the employee's **local** camera and mic.
 **"Could not find CABLE Input"** — VB-CABLE isn't installed or the PC wasn't rebooted. Reinstall
 and reboot, or run `python receiver.py --list-audio` and pass the right index with `--audio-out N`.
 
-**"OBS Virtual Camera" not listed in the meeting app** — install OBS Studio, open it once, and
-try again. Some apps only refresh the camera list after a restart.
+**"OBS Virtual Camera" not listed in the meeting app** — re-run the installer with "virtual camera +
+microphone" ticked (or
+`tools\virtualcam.bat install` as administrator) and restart the meeting app; some apps only
+refresh the camera list after a restart. If OBS Studio was uninstalled after CamBridge was
+installed, OBS's uninstaller removes the camera too — re-run the installer.
+
+**Receiver says "OBS Virtual Camera device not found! Did you install OBS?"** — same fix as
+above; that message comes from the `pyvirtualcam` library. OBS Studio itself isn't needed.
 
 **Camera is black / wrong camera on the local PC** — run `python sender.py --list-devices` and
 pass the right one, e.g. `python sender.py --host <ip> --camera 1`.
@@ -174,6 +191,7 @@ remote side; the audio only needs to flow into CABLE, not out of the remote PC's
 
 ## Packaging as .exe (no Python for employees)
 To hand employees double-click apps with no Python install, run **`client\build_exe.bat`** once on
-any Windows 11 PC that has Python. It produces `client\dist\CamBridge-Sender.exe` and
-`client\dist\CamBridge-Receiver.exe`. Full instructions are in **BUILD.md**. (OBS and VB-CABLE still need
-installing on the remote PC — those are system drivers, not bundled into the exe.)
+any Windows 11 PC that has Python. It produces `client\dist\CamBridge.exe`, used on both PCs.
+Full instructions are in **BUILD.md**. (The virtual camera and VB-CABLE
+still need installing on the remote PC — those are system devices, not bundled into the exe; the
+installer handles both.)

@@ -51,7 +51,7 @@ special support** — this is what makes it platform-agnostic across Teams, Zoom
 | `sender.py` | Local PC | Capture webcam (OpenCV) + mic (sounddevice), encode, connect out to relay |
 | `receiver.py` | Remote PC | Connect out to relay, push video → virtual camera, audio → virtual mic |
 | `relay.py` | Public VPS | Pair sender+receiver by room token, forward the stream; optional TLS (stdlib only) |
-| `sender_gui.py` / `receiver_gui.py` | Local / Remote PC | tkinter front-ends: relay + room fields, TLS toggle, Start/Stop, live log |
+| `cambridge_gui.py` | Both PCs | One tkinter app: Send/Receive mode, relay + room fields, TLS toggle, Start/Stop, live log |
 | `gen_cert.sh` | Public VPS | One-command self-signed TLS certificate generator for the relay |
 | Virtual camera driver | Remote PC | OBS Virtual Camera (system-wide camera device) |
 | Virtual audio driver | Remote PC | VB-Audio Virtual Cable (system-wide mic device) |
@@ -69,9 +69,11 @@ into a standalone `.exe` with PyInstaller so employees don't need Python install
 **Audio capture/playback:** `sounddevice` (PortAudio) — simple blocking read/write and easy
 device selection by name.
 
-**Video virtual camera:** `pyvirtualcam` driving the **OBS Virtual Camera** backend.
-Installing OBS Studio (free) registers a system-wide DirectShow camera that Teams, Zoom, and
-browsers (Google Meet) all recognize. `pyvirtualcam` writes frames straight into it.
+**Video virtual camera:** `pyvirtualcam` driving the **OBS Virtual Camera** backend — a
+system-wide DirectShow camera that Teams, Zoom, and browsers (Google Meet) all recognize.
+`pyvirtualcam` writes frames into it through shared memory and only checks that the camera's COM
+class is registered, so CamBridge ships **just OBS's virtual-camera DLLs** (~0.4 MB, GPLv2, signed
+by OBS Project) and registers them with `regsvr32` — **OBS Studio itself is not installed**.
 
 **Audio virtual mic:** **VB-Audio Virtual Cable** (VB-CABLE) — a free, Microsoft-signed audio
 driver. It creates a `CABLE Input` playback endpoint and a `CABLE Output` recording endpoint.
@@ -89,7 +91,8 @@ paired — it never parses the media, so framing is preserved end-to-end.
 A "proper" productized version would ship one signed Windows driver package (a Media Foundation
 virtual camera + a virtual audio driver) so there are no third-party installs. That requires C++
 driver development and code-signing certificates — weeks of work and out of scope for a prototype.
-The OBS + VB-CABLE combination gives you the **same end result today** with two quick installs.
+The OBS virtual-camera module + VB-CABLE combination gives you the **same end result today**,
+set up by one installer.
 See §6 for the productization path.
 
 ---
@@ -118,12 +121,13 @@ Default ports: **50007** (video), **50008** (audio). Configurable on all three p
 On the **VPS** (one-time): run `relay.py` and open ports 50007/50008. Best run as an always-on
 service so it's ready for every meeting.
 
-On the **remote PC** (one-time): install OBS Studio, install VB-CABLE, install the CamBridge
-receiver. Then each meeting: run the receiver (pointing at the relay + room), open Teams/Zoom/Meet,
+On the **remote PC** (one-time): run the CamBridge installer with "virtual camera + microphone"
+ticked (it registers the virtual camera and installs VB-CABLE). Then each meeting: open CamBridge in
+**Receive** mode (pointing at the relay + room), open Teams/Zoom/Meet,
 pick "OBS Virtual Camera" and "CABLE Output" as camera/mic, and join.
 
-On the **local PC** (one-time): install the CamBridge sender. Each meeting: run the sender pointing
-at the same relay + room.
+On the **local PC** (one-time): run the same installer with that option unticked. Each meeting:
+open CamBridge in **Send** mode pointing at the same relay + room.
 
 Full click-by-click steps are in **SETUP.md**.
 
@@ -134,7 +138,8 @@ Full click-by-click steps are in **SETUP.md**.
 **Prototype limitations (be aware):**
 - Latency on a good connection is roughly 150–400 ms — fine for a standup, not for music.
 - Video/audio are only loosely synced (separate streams); acceptable for talking heads.
-- Requires OBS and VB-CABLE installed on the remote PC, plus a VPS running the relay.
+- Requires the OBS virtual-camera module and VB-CABLE on the remote PC (the installer
+  sets up both; no OBS Studio), plus a VPS running the relay.
 - Someone must start the receiver on the remote PC (e.g. via Remote Desktop) before joining.
 - **Encryption is now available via TLS** (`--tls` on all three programs, `gen_cert.sh` to make a
   certificate). When enabled with a verified certificate, media is encrypted client↔relay in both
@@ -146,13 +151,14 @@ Full click-by-click steps are in **SETUP.md**.
 1. **[Done] Encrypt the relay link** — TLS is implemented (client↔relay). Next step for true
    end-to-end secrecy: terminate TLS at the endpoints instead of the relay (receiver acts as TLS
    server through the relay's byte pipe), so the VPS never sees plaintext.
-2. **[Done] Simple GUI** — `sender_gui.py` / `receiver_gui.py` give a relay+room form, TLS toggle,
+2. **[Done] Simple GUI** — one app, `cambridge_gui.py`, with a Send/Receive mode, relay+room form, TLS toggle,
    and Start/Stop. Could still add an in-GUI camera/mic picker.
 3. **One-click installer** (Inno Setup) that bundles the `.exe` files and silently installs VB-CABLE.
 4. **Run the relay as a managed service** (systemd on the VPS) and auto-start the receiver as a
    Windows service so both are always ready.
 5. **Opus/H.264 encoding + WebRTC** to cut bandwidth and latency and add encryption natively.
-6. **Native signed virtual-camera + virtual-audio driver** to remove the OBS/VB-CABLE dependency.
+6. **Native virtual camera + signed virtual-audio driver** to remove the OBS-module/VB-CABLE
+   dependency (Windows 11's `MFCreateVirtualCamera` API needs no kernel driver for the camera).
 
 ---
 

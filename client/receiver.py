@@ -11,7 +11,8 @@ In the meeting app on this PC, select:
   * Microphone -> "CABLE Output (VB-Audio Virtual Cable)"
 
 Prerequisites on this PC (see SETUP.md):
-  * OBS Studio installed (registers the virtual camera)
+  * OBS virtual camera registered - the installer does this, or
+    tools\virtualcam.bat (OBS Studio itself is NOT needed)
   * VB-Audio Virtual Cable installed
   * pip install -r requirements.txt
 
@@ -24,8 +25,8 @@ Usage:
 --room      = the same shared token used by the sender.
 --tls/--cafile/--insecure = same meaning as in sender.py.
 
-This module is also imported by receiver_gui.py; the GUI overrides `log` and
-calls start()/stop().
+This module is also imported by cambridge_gui.py (Receive mode); the GUI overrides
+`log` and calls start()/stop().
 """
 
 import argparse

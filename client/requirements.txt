@@ -8,5 +8,6 @@ opencv-python>=4.8
 numpy>=1.24
 sounddevice>=0.4.6
 # pyvirtualcam is only needed on the REMOTE PC (receiver).
-# The OBS Virtual Camera must be installed (comes with OBS Studio).
+# The OBS Virtual Camera must be registered (installer or tools\virtualcam.bat;
+# OBS Studio itself is not required).
 pyvirtualcam>=0.11

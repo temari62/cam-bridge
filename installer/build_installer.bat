@@ -1,11 +1,12 @@
 @echo off
 REM =====================================================================
-REM  CamBridge - build the Windows installers with Inno Setup 6
+REM  CamBridge - build the Windows installer with Inno Setup 6
 REM  Prereqs:
 REM    1) Inno Setup 6 installed  (https://jrsoftware.org/isdl.php)
-REM    2) build_exe.bat already run  (so ..\client\dist\*.exe exist)
+REM    2) build_exe.bat already run  (so ..\client\dist\CamBridge.exe exists)
 REM    3) vendor\VBCABLE_Setup_x64.exe present (see vendor\README.txt)
-REM  Output installers land in:  installer\Output\
+REM       (vendor\obs-virtualcam\ is fetched automatically if missing)
+REM  Output installer lands in:  installer\Output\
 REM =====================================================================
 setlocal
 cd /d "%~dp0"
@@ -21,32 +22,31 @@ if not defined ISCC (
 )
 
 REM --- sanity checks ---
-if not exist "..\client\dist\CamBridge-Receiver.exe" (
-  echo ERROR: ..\client\dist\CamBridge-Receiver.exe missing. Run build_exe.bat first.
+if not exist "..\client\dist\CamBridge.exe" (
+  echo ERROR: ..\client\dist\CamBridge.exe missing. Run build_exe.bat first.
   pause & exit /b 1
 )
 if not exist "vendor\VBCABLE_Setup_x64.exe" (
   echo ERROR: vendor\VBCABLE_Setup_x64.exe missing. See vendor\README.txt.
   pause & exit /b 1
 )
-
-echo Building Receiver installer...
-"%ISCC%" "CamBridge-Receiver.iss" || goto :err
-call "..\tools\sign.bat" "Output\CamBridge-Receiver-Setup.exe" || goto :err
-
-if exist "..\client\dist\CamBridge-Sender.exe" (
-  echo Building Sender installer...
-  "%ISCC%" "CamBridge-Sender.iss" || goto :err
-  call "..\tools\sign.bat" "Output\CamBridge-Sender-Setup.exe" || goto :err
-) else (
-  echo (Skipping Sender installer - ..\client\dist\CamBridge-Sender.exe not found.)
+if not exist "vendor\obs-virtualcam\obs-virtualcam-module64.dll" (
+  echo Fetching the OBS virtual camera DLLs...
+  python fetch_obs_virtualcam.py || (
+    echo ERROR: could not fetch vendor\obs-virtualcam\. See vendor\README.txt.
+    pause & exit /b 1
+  )
 )
+
+echo Building installer...
+"%ISCC%" "CamBridge-Setup.iss" || goto :err
+call "..\tools\sign.bat" "Output\CamBridge-Setup.exe" || goto :err
 
 echo.
 echo ============================================================
-echo  DONE. Installers are in:  installer\Output\
-echo     CamBridge-Receiver-Setup.exe   (give to REMOTE PCs)
-echo     CamBridge-Sender-Setup.exe     (give to LOCAL PCs)
+echo  DONE. Installer is in:  installer\Output\
+echo     CamBridge-Setup.exe   (give to BOTH PCs; untick "virtual
+echo                            camera + microphone" on LOCAL PCs)
 echo ============================================================
 pause
 exit /b 0

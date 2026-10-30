@@ -46,11 +46,11 @@ set CAMBRIDGE_SIGN_TS=http://timestamp.sectigo.com
 ## 3. Build as usual
 
 ```
-client\build_exe.bat          rem signs CamBridge-Sender.exe and CamBridge-Receiver.exe
-installer\build_installer.bat rem signs the two Setup.exe installers too
+client\build_exe.bat          rem signs CamBridge.exe
+installer\build_installer.bat rem signs CamBridge-Setup.exe too
 ```
 
-You'll see `[sign] signed: ...` lines. Everything the employee runs — the apps and the installers —
+You'll see `[sign] signed: ...` lines. Everything the employee runs — the app and the installer —
 is then signed. (Because the exes are signed before the installer packages them, the whole chain is
 covered.)
 

@@ -98,6 +98,13 @@ def apply(root):
     try:
         import sv_ttk
         sv_ttk.set_theme(mode)
+        # sv-ttk sets the base text/background colours in a <<ThemeChanged>>
+        # handler on the root, but Tk doesn't deliver that event to a root that
+        # isn't mapped yet - leaving every label black. Fire it ourselves.
+        root.event_generate("<<ThemeChanged>>")
+        style = ttk.Style()
+        if not style.lookup(".", "foreground"):
+            style.configure(".", foreground="#fafafa" if dark else "#1c1c1c")
     except Exception:
         pass  # fall back to default ttk theme
     _match_backgrounds(root, dark)

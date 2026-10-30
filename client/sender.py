@@ -18,8 +18,8 @@ Usage:
 --cafile    = verify the relay against this certificate (PEM). Use for self-signed certs.
 --insecure  = with --tls, encrypt but skip certificate verification (less safe).
 
-This module is also imported by sender_gui.py; the GUI overrides `log` and calls
-start()/stop().
+This module is also imported by cambridge_gui.py (Send mode); the GUI overrides `log`
+and calls start()/stop().
 """
 
 import argparse

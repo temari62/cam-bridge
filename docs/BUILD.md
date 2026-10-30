@@ -1,10 +1,8 @@
-# CamBridge — Building the .exe files
+# CamBridge — Building the .exe
 
-This turns the Python scripts into two standalone Windows apps so employees never
-install Python:
-
-- **CamBridge-Sender.exe** — give to LOCAL PCs (the employee's machine).
-- **CamBridge-Receiver.exe** — give to REMOTE PCs (the one that joins the meeting).
+This turns the Python scripts into one standalone Windows app, **CamBridge.exe**, so employees
+never install Python. The same exe goes on both PCs — in the app, choose **Send** on the LOCAL PC
+(the employee's machine) and **Receive** on the REMOTE PC (the one that joins the meeting).
 
 ## You build once, on Windows
 
@@ -16,20 +14,22 @@ Windows machine. So run the build on any Windows 11 PC with Python 3.10+ install
 1. Copy the whole `cam-bridge` folder to a Windows 11 PC that has
    **Python 3.10+** (installed with "Add python.exe to PATH").
 2. Double-click **`client\build_exe.bat`**.
-   It installs the dependencies + PyInstaller and builds both apps.
-3. When it finishes, the executables are in the new **`client\dist\`** folder:
-   - `client\dist\CamBridge-Sender.exe`
-   - `client\dist\CamBridge-Receiver.exe`
+   It installs the dependencies + PyInstaller and builds the app.
+3. When it finishes, the executable is in the new **`client\dist\`** folder:
+   `client\dist\CamBridge.exe`
 
 First launch of a onefile exe is a few seconds slower (it unpacks to a temp folder);
 after that it's normal.
 
 ## Distributing to employees
 
-- **Local PC:** copy `CamBridge-Sender.exe` anywhere and double-click it. Done.
-- **Remote PC:** copy `CamBridge-Receiver.exe`, **and** first install the two system
-  drivers it depends on (these cannot be baked into an exe):
-  - **OBS Studio** (provides the virtual camera), and
+Easiest is the installer (`INSTALLER.md`), which handles both PCs. To copy the exe by hand:
+
+- **Local PC:** copy `CamBridge.exe` anywhere, double-click it, choose **Send**. Done.
+- **Remote PC:** copy `CamBridge.exe` and choose **Receive** — but first set up the two system
+  devices Receive mode depends on
+  (these cannot be baked into an exe):
+  - the **virtual camera** — `tools\virtualcam.bat install` (OBS Studio is not needed), and
   - **VB-Audio Virtual Cable** (provides the virtual mic).
   See `SETUP.md` Part A for those.
 - **TLS:** if you enabled encryption, put a copy of **`relay-cert.pem`** next to the exe
