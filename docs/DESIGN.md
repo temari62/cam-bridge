@@ -52,6 +52,7 @@ special support** — this is what makes it platform-agnostic across Teams, Zoom
 | `receiver.py` | Remote PC | Connect out to relay, push video → virtual camera, audio → virtual mic |
 | `relay.py` | Public VPS | Pair sender+receiver by room token, forward the stream; optional TLS (stdlib only) |
 | `cambridge_gui.py` | Both PCs | One tkinter app: Send/Receive mode, relay + room fields, TLS toggle, Start/Stop, live log |
+| `background.py` | Local PC | Optional virtual background: segments the person (OpenCV DNN + PP-HumanSeg) and blurs or replaces the room before encoding |
 | `gen_cert.sh` | Public VPS | One-command self-signed TLS certificate generator for the relay |
 | Virtual camera driver | Remote PC | OBS Virtual Camera (system-wide camera device) |
 | Virtual audio driver | Remote PC | VB-Audio Virtual Cable (system-wide mic device) |
@@ -64,7 +65,17 @@ special support** — this is what makes it platform-agnostic across Teams, Zoom
 **Language: Python 3.10+.** Fastest path to a working, cross-tested prototype, and packages
 into a standalone `.exe` with PyInstaller so employees don't need Python installed.
 
-**Video capture:** `opencv-python` — reliable webcam access and JPEG encode/decode.
+**Video capture:** `opencv-python` — reliable webcam access and JPEG encode/decode. Cameras are
+listed by name straight from Windows' DirectShow device enumerator (ctypes, no extra package),
+which is the same list OpenCV's `CAP_DSHOW` backend numbers, so the names and indexes always agree.
+
+**Virtual background:** `background.py` runs the OpenCV Zoo **PP-HumanSeg** portrait model
+(`client/models/pphumanseg.onnx`, 6 MB, Apache-2.0) through OpenCV's built-in DNN module on the
+CPU — about 10 ms to segment plus 10 ms to composite a 720p frame — so there is no MediaPipe or
+ONNX Runtime dependency to bundle. The mask is smoothed over time and feathered at the edges, and the
+room is either blurred (shrink → Gaussian → enlarge, which is cheap and looks like bokeh) or
+replaced by a picture that is scaled and centre-cropped to the frame. It runs on the sending PC,
+so the meeting PC and the relay are unchanged.
 
 **Audio capture/playback:** `sounddevice` (PortAudio) — simple blocking read/write and easy
 device selection by name.

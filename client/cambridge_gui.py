@@ -98,6 +98,16 @@ HELP = [
              "module and VB-CABLE. The CamBridge installer does both when 'virtual camera + "
              "microphone' is ticked."),
 
+    ("h1", "Virtual background (when sending)"),
+    ("body", "In the 'Camera (when sending)' tab set Background to Blur to soften the room behind "
+             "you (pick Light / Medium / Strong), or to Picture and Browse to a jpg/png that "
+             "replaces the room. Set it before clicking Send; the meeting PC receives the "
+             "finished picture, so nothing needs changing there."),
+    ("body", "The person is detected on this PC (OpenCV, nothing leaves the computer). It costs "
+             "about 20 ms per frame: if the video stutters on a slow laptop, lower the FPS or the "
+             "size. A picture is scaled and cropped to fill the frame, so use one with the same "
+             "shape as the camera (16:9). Even light and a plain wall give the cleanest edges."),
+
     ("h1", "Updates"),
     ("body", "CamBridge checks GitHub for a newer release each time it starts. When one exists "
              "a bar appears at the top of the window; click 'Update now' to download and "
@@ -114,7 +124,10 @@ HELP = [
              "with the exact address you type into 'Relay server'."),
     ("body", "Connected but no video/audio: the two PCs use different room tokens, or the other "
              "side is not running yet."),
-    ("body", "Choppy: lower Width / Height / FPS under 'Camera' before clicking Send."),
+    ("body", "Choppy: lower Width / Height / FPS under 'Camera' before clicking Send (a virtual "
+             "background adds CPU work; try Background = None to compare)."),
+    ("body", "Wrong camera: the Camera dropdown lists the devices by their Windows names, in the "
+             "order OpenCV uses. Click the refresh button after plugging a camera in."),
     ("body", "Echo in the meeting: mute the meeting PC's speakers or use headphones there."),
 ]
 
@@ -177,7 +190,14 @@ ICONS = {
     "width":  ("↔", "↔"),   # left-right arrow
     "height": ("↕", "↕"),   # up-down arrow
     "fps":    ("", "⏱"),   # stopwatch
+    "bg":     ("", "🖼"),  # photo
+    "blur":   ("", "◌"),   # brightness
+    "image":  ("", "📁"),  # folder
 }
+
+# Virtual background dropdowns: shown label -> value passed to background.create().
+BG_MODES = {"None": "off", "Blur": "blur", "Picture": "image"}
+BG_BLUR = {"Light": "light", "Medium": "medium", "Strong": "strong"}
 _icon_font = None
 
 
@@ -247,8 +267,8 @@ class App:
         self.cfg = cfg = load_cfg()
 
         root.title("CamBridge")
-        root.geometry("620x400")
-        root.minsize(560, 380)
+        root.geometry("620x480")
+        root.minsize(560, 460)
         self.mode_kind = theme.apply(root)
         theme.set_icon(root)
 
@@ -331,6 +351,28 @@ class App:
         self.fps = ttk.Entry(size, width=6)
         self.fps.grid(row=0, column=5, sticky="w")
         self.fps.insert(0, str(cfg.get("fps", 30)))
+
+        # Virtual background: blur the room behind you or put a picture there.
+        bgrow = ttk.Frame(adv)
+        bgrow.grid(row=2, column=0, columnspan=4, sticky="w", pady=(14, 0))
+        field_label(bgrow, "bg", "Background").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.bg_mode = ttk.Combobox(bgrow, state="readonly", width=9, values=list(BG_MODES))
+        self.bg_mode.grid(row=0, column=1, sticky="w", padx=(0, 18))
+        self._select(self.bg_mode, BG_MODES, cfg.get("bg_mode", "off"))
+        self.bg_mode.bind("<<ComboboxSelected>>", lambda e: self._bg_changed())
+        field_label(bgrow, "blur", "Blur").grid(row=0, column=2, sticky="w", padx=(0, 8))
+        self.bg_blur = ttk.Combobox(bgrow, state="readonly", width=9, values=list(BG_BLUR))
+        self.bg_blur.grid(row=0, column=3, sticky="w")
+        self._select(self.bg_blur, BG_BLUR, cfg.get("bg_blur", "medium"))
+
+        field_label(adv, "image", "Picture").grid(row=3, column=0, sticky="w", padx=(0, 8),
+                                                   pady=(8, 0))
+        self.bg_image = ttk.Entry(adv)
+        self.bg_image.grid(row=3, column=1, columnspan=2, sticky="we", pady=(8, 0))
+        self.bg_image.insert(0, cfg.get("bg_image", ""))
+        self.bg_browse = ttk.Button(adv, text="Browse", width=9, command=self._browse_image)
+        self.bg_browse.grid(row=3, column=3, sticky="w", padx=(8, 0), pady=(8, 0))
+        self._bg_changed()
         self._scan_cameras()
 
         # --- Action bar: Send / Receive (each doubles as Stop) ---
@@ -576,6 +618,42 @@ class App:
     def _camera_index(self):
         return self.cameras.get(self.camera.get(), self.cfg.get("camera", 0))
 
+    # --- Virtual background -------------------------------------------------------
+    @staticmethod
+    def _select(combo, mapping, value):
+        """Show the label whose mapped value is `value` (first label if unknown)."""
+        labels = list(mapping)
+        label = next((k for k, v in mapping.items() if v == value), labels[0])
+        combo.current(labels.index(label))
+
+    def _bg_mode(self):
+        return BG_MODES.get(self.bg_mode.get(), "off")
+
+    def _bg_changed(self):
+        """Only the controls that matter for the chosen background mode are enabled."""
+        if self.running is not None:
+            return
+        mode = self._bg_mode()
+        self.bg_blur.configure(state="readonly" if mode == "blur" else "disabled")
+        for w in (self.bg_image, self.bg_browse):
+            w.configure(state="normal" if mode == "image" else "disabled")
+
+    def _browse_image(self):
+        path = filedialog.askopenfilename(
+            title="Background picture",
+            filetypes=[("Pictures", "*.jpg *.jpeg *.png *.bmp *.webp"), ("All", "*.*")])
+        if path:
+            self.bg_image.delete(0, "end")
+            self.bg_image.insert(0, path)
+
+    def _make_background(self):
+        """Build the sender's VirtualBackground from the fields, or None. Raises on a bad setup."""
+        if self._bg_mode() == "off":
+            return None
+        import background
+        return background.create(self._bg_mode(), image=self.bg_image.get().strip(),
+                                 blur=BG_BLUR.get(self.bg_blur.get(), "medium"))
+
     # --- Helpers ----------------------------------------------------------------
     def _browse(self):
         path = filedialog.askopenfilename(title="Relay certificate",
@@ -613,9 +691,12 @@ class App:
             else:
                 btn.configure(state="disabled")
         for w in (self.host, self.room, self.cafile, self.browse_btn, self.refresh_btn,
-                  self.width, self.height, self.fps):
+                  self.width, self.height, self.fps, self.bg_blur, self.bg_image,
+                  self.bg_browse):
             w.configure(state="disabled" if mode else "normal")
-        self.camera.configure(state="disabled" if mode else "readonly")
+        for w in (self.camera, self.bg_mode):
+            w.configure(state="disabled" if mode else "readonly")
+        self._bg_changed()
         self.hint.configure(text=RECEIVE_HINT if mode == "receive" else "")
 
     # --- Actions ----------------------------------------------------------------
@@ -643,6 +724,8 @@ class App:
             "mode": mode, "host": host, "room": room, "cafile": cafile,
             "camera": self._camera_index(), "width": self._int(self.width, 1280),
             "height": self._int(self.height, 720), "fps": self._int(self.fps, 30),
+            "bg_mode": self._bg_mode(), "bg_blur": BG_BLUR.get(self.bg_blur.get(), "medium"),
+            "bg_image": self.bg_image.get().strip(),
         })
         save_cfg(self.cfg)
         try:
@@ -651,12 +734,20 @@ class App:
             messagebox.showerror("CamBridge", f"Could not load the {mode} engine:\n\n{e}\n\n"
                                  "Run:  pip install -r requirements.txt")
             return
+        bg = None
+        if mode == "send":
+            try:
+                bg = self._make_background()
+            except Exception as e:  # picture missing/unreadable, model file missing
+                messagebox.showwarning("CamBridge", f"Virtual background could not be set up:\n\n"
+                                       f"{e}\n\nPick another picture, or set Background to None.")
+                return
         tls = dict(use_tls=True, cafile=cafile, insecure=False)
         try:
             if mode == "send":
                 self.threads = core.start(host, room, camera=self.cfg["camera"],
                                           width=self.cfg["width"], height=self.cfg["height"],
-                                          fps=self.cfg["fps"], **tls)
+                                          fps=self.cfg["fps"], background=bg, **tls)
             else:
                 self.threads = core.start(host, room, **tls)
         except Exception as e:

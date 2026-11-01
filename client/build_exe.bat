@@ -28,6 +28,7 @@ pyinstaller --noconfirm --clean --onefile --windowed ^
   --name CamBridge ^
   --icon "..\assets\CamBridge.ico" ^
   --add-data "..\assets\CamBridge.ico;assets" ^
+  --add-data "models;models" ^
   --collect-all cv2 ^
   --collect-all numpy ^
   --collect-all sounddevice ^

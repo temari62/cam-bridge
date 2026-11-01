@@ -22,7 +22,8 @@ First launch of a onefile exe is a few seconds slower (it unpacks to a temp fold
 after that it's normal.
 
 To publish a version that installed apps pick up automatically, see **RELEASE.md**
-(`python toolselease.py` builds everything and uploads it to GitHub Releases).
+(`python tools
+elease.py` builds everything and uploads it to GitHub Releases).
 
 ## Distributing to employees
 
@@ -46,5 +47,7 @@ Easiest is the installer (`INSTALLER.md`), which handles both PCs. To copy the e
 - **64-bit:** build on 64-bit Windows so the exe runs on your (64-bit) employee PCs.
 - **Camera/mic not found at runtime** — that's a device/driver issue on the target PC,
   not a build issue; use the app's fields (or the CLI `--list-devices`) to pick the right one.
+- **Virtual background model:** `build_exe.bat` bundles `client\models\` (the 6 MB PP-HumanSeg
+  model used by the Background option) into the exe. Keep that folder next to the scripts.
 - **Rebuild after code changes:** just run `build_exe.bat` again; `--clean` refreshes everything.
 - The **relay** does not need an exe — it runs as `python3 relay.py` on your Linux VPS.

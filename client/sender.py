@@ -10,13 +10,17 @@ Usage:
     python sender.py --host relay.example.com --room mystandup
     python sender.py --host 203.0.113.10 --room mystandup --tls --cafile relay-cert.pem
     python sender.py --host 203.0.113.10 --room mystandup --tls --insecure
+    python sender.py --host relay.example.com --room mystandup --background blur --blur strong
+    python sender.py --host relay.example.com --room mystandup --background image --background-image office.jpg
     python sender.py --list-devices                  # show cameras/mics, then exit
 
---host      = the RELAY server's public IP or domain.
---room      = a shared secret token; the sender and receiver that share a room get paired.
---tls       = encrypt the connection to the relay.
---cafile    = verify the relay against this certificate (PEM). Use for self-signed certs.
---insecure  = with --tls, encrypt but skip certificate verification (less safe).
+--host        = the RELAY server's public IP or domain.
+--room        = a shared secret token; the sender and receiver that share a room get paired.
+--tls         = encrypt the connection to the relay.
+--cafile      = verify the relay against this certificate (PEM). Use for self-signed certs.
+--insecure    = with --tls, encrypt but skip certificate verification (less safe).
+--background  = off | blur | image: blur the room behind you or replace it with a picture
+                (--background-image FILE); --blur light|medium|strong sets the blur amount.
 
 This module is also imported by cambridge_gui.py (Send mode); the GUI overrides `log`
 and calls start()/stop().
@@ -94,7 +98,7 @@ def connect_with_retry(host, port, room, label, ssl_ctx):
 
 
 # --- Video thread --------------------------------------------------------------
-def video_loop(host, room, ssl_ctx, cam_index, width, height, fps, quality):
+def video_loop(host, room, ssl_ctx, cam_index, width, height, fps, quality, background=None):
     cap = cv2.VideoCapture(cam_index, cv2.CAP_DSHOW)  # DSHOW = fast on Windows
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
@@ -106,6 +110,8 @@ def video_loop(host, room, ssl_ctx, cam_index, width, height, fps, quality):
 
     encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
     frame_interval = 1.0 / fps
+    if background is not None:
+        log(f"[video] virtual background: {background.describe()}")
 
     while not _stop.is_set():
         sock = connect_with_retry(host, VIDEO_PORT, room, "video", ssl_ctx)
@@ -120,6 +126,12 @@ def video_loop(host, room, ssl_ctx, cam_index, width, height, fps, quality):
                     time.sleep(0.05)
                     continue
                 frame = cv2.resize(frame, (width, height))
+                if background is not None:
+                    try:
+                        frame = background.apply(frame)
+                    except Exception as e:  # keep streaming the plain picture
+                        log(f"[video] virtual background failed ({e}); continuing without it")
+                        background = None
                 ok, buf = cv2.imencode(".jpg", frame, encode_params)
                 if not ok:
                     continue
@@ -181,13 +193,15 @@ def audio_loop(host, room, ssl_ctx, mic_index):
 
 # --- Start/stop API (used by CLI main and the GUI) -----------------------------
 def start(host, room, use_tls=False, cafile=None, insecure=False,
-          camera=0, mic=None, width=1280, height=720, fps=30, quality=80):
-    """Start streaming in background threads. Returns the thread list."""
+          camera=0, mic=None, width=1280, height=720, fps=30, quality=80, background=None):
+    """Start streaming in background threads. Returns the thread list.
+
+    background: a background.VirtualBackground (blur / picture behind you) or None."""
     _stop.clear()
     ssl_ctx = make_client_ssl(use_tls, cafile, insecure)
     vt = threading.Thread(
         target=video_loop,
-        args=(host, room, ssl_ctx, camera, width, height, fps, quality),
+        args=(host, room, ssl_ctx, camera, width, height, fps, quality, background),
         daemon=True,
     )
     at = threading.Thread(target=audio_loop, args=(host, room, ssl_ctx, mic), daemon=True)
@@ -201,43 +215,117 @@ def stop():
 
 
 # --- Utilities -----------------------------------------------------------------
-def _windows_camera_names():
-    """Friendly names of the PC's cameras from Plug and Play (Windows only), or []."""
-    import subprocess
+def _dshow_camera_names():
+    """Names of the DirectShow video capture devices, in DirectShow's own order.
+
+    OpenCV's CAP_DSHOW backend numbers cameras by walking the same system device
+    enumerator (CLSID_VideoInputDeviceCategory), so position i in this list is exactly
+    camera index i. Talks COM through ctypes only; raises on non-Windows or COM errors."""
+    import ctypes
+    from ctypes import POINTER, Structure, byref, c_ubyte, c_ulong, c_ushort, c_void_p, c_wchar_p
+
+    class GUID(Structure):
+        _fields_ = [("Data1", c_ulong), ("Data2", c_ushort), ("Data3", c_ushort),
+                    ("Data4", c_ubyte * 8)]
+
+        def __init__(self, text):
+            super().__init__()
+            p = text.strip("{}").split("-")
+            self.Data1, self.Data2, self.Data3 = int(p[0], 16), int(p[1], 16), int(p[2], 16)
+            self.Data4 = (c_ubyte * 8)(*bytes.fromhex(p[3] + p[4]))
+
+    class VARIANT(Structure):
+        _fields_ = [("vt", c_ushort), ("r1", c_ushort), ("r2", c_ushort), ("r3", c_ushort),
+                    ("bstr", c_void_p), ("pad", c_void_p)]
+
+    CLSID_SystemDeviceEnum = GUID("{62BE5D10-60EB-11d0-BD3B-00A0C911CE86}")
+    IID_ICreateDevEnum = GUID("{29840822-5B84-11D0-BD3B-00A0C911CE86}")
+    CLSID_VideoInputDeviceCategory = GUID("{860BB310-5D01-11d0-BD3B-00A0C911CE86}")
+    IID_IPropertyBag = GUID("{55272A00-42CB-11CE-8135-00AA004BB851}")
+    CLSCTX_INPROC_SERVER, VT_BSTR, HRESULT = 1, 8, ctypes.HRESULT
+    ole32, oleaut32 = ctypes.windll.ole32, ctypes.windll.oleaut32
+
+    def method(obj, index, restype, *argtypes):
+        """Bind COM vtable slot `index` of interface pointer `obj`."""
+        vtbl = ctypes.cast(obj, POINTER(POINTER(c_void_p)))[0]
+        return ctypes.WINFUNCTYPE(restype, c_void_p, *argtypes)(vtbl[index])
+
+    def release(obj):
+        method(obj, 2, c_ulong)(obj)
+
+    names = []
+    uninit = ole32.CoInitializeEx(None, 0) in (0, 1)  # S_OK / S_FALSE: we must uninit
     try:
-        r = subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             "Get-PnpDevice -Class Camera,Image -Status OK | "
-             "Select-Object -ExpandProperty FriendlyName"],
-            capture_output=True, text=True, timeout=20,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        return [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
-    except Exception:
-        return []
+        dev_enum = c_void_p()
+        hr = ole32.CoCreateInstance(byref(CLSID_SystemDeviceEnum), None, CLSCTX_INPROC_SERVER,
+                                    byref(IID_ICreateDevEnum), byref(dev_enum))
+        if hr != 0 or not dev_enum:
+            raise OSError(f"CoCreateInstance(SystemDeviceEnum) failed: 0x{hr & 0xFFFFFFFF:08X}")
+        try:
+            enum_mon = c_void_p()
+            # ICreateDevEnum::CreateClassEnumerator(REFCLSID, IEnumMoniker**, DWORD) = slot 3
+            hr = method(dev_enum, 3, HRESULT, POINTER(GUID), POINTER(c_void_p), c_ulong)(
+                dev_enum, byref(CLSID_VideoInputDeviceCategory), byref(enum_mon), 0)
+            if hr != 0 or not enum_mon:   # S_FALSE: the category is empty
+                return names
+            try:
+                # IEnumMoniker::Next(ULONG, IMoniker**, ULONG*) = slot 3
+                next_ = method(enum_mon, 3, HRESULT, c_ulong, POINTER(c_void_p), POINTER(c_ulong))
+                while True:
+                    mon, fetched = c_void_p(), c_ulong(0)
+                    if next_(enum_mon, 1, byref(mon), byref(fetched)) != 0 or not fetched.value:
+                        break
+                    try:
+                        name = ""
+                        bag = c_void_p()
+                        # IMoniker::BindToStorage(IBindCtx*, IMoniker*, REFIID, void**) = slot 9
+                        hr = method(mon, 9, HRESULT, c_void_p, c_void_p, POINTER(GUID),
+                                    POINTER(c_void_p))(mon, None, None, byref(IID_IPropertyBag),
+                                                       byref(bag))
+                        if hr == 0 and bag:
+                            try:
+                                var = VARIANT()
+                                # IPropertyBag::Read(LPCOLESTR, VARIANT*, IErrorLog*) = slot 3
+                                hr = method(bag, 3, HRESULT, c_wchar_p, POINTER(VARIANT),
+                                            c_void_p)(bag, "FriendlyName", byref(var), None)
+                                if hr == 0 and var.vt == VT_BSTR and var.bstr:
+                                    name = ctypes.wstring_at(var.bstr)
+                                oleaut32.VariantClear(byref(var))
+                            finally:
+                                release(bag)
+                        names.append(name or f"Camera {len(names)}")
+                    finally:
+                        release(mon)
+            finally:
+                release(enum_mon)
+        finally:
+            release(dev_enum)
+    finally:
+        if uninit:
+            ole32.CoUninitialize()
+    return names
 
 
 def list_cameras(max_index=6):
-    """Return [(index, label)] for cameras OpenCV can open.
+    """Return [(index, label)] for the PC's cameras, e.g. (0, '0: Logitech C920').
 
-    OpenCV only knows cameras by DirectShow index. When Windows reports the same
-    number of camera devices, their names are paired with the indexes in order
-    (exact for the usual single-webcam PC); otherwise generic labels are used."""
-    try:  # optional: exact DirectShow names in OpenCV's index order
-        from pygrabber.dshow_graph import FilterGraph
-        names = FilterGraph().get_input_devices()
-        return [(i, f"{i}: {n}") for i, n in enumerate(names)]
-    except Exception:
-        pass
+    OpenCV only knows cameras by DirectShow index, and Windows' DirectShow enumerator
+    is the ground truth for that order, so the names are read straight from it (no
+    camera is opened, so nothing flickers). If that fails (not Windows, COM error),
+    fall back to probing indexes with OpenCV under generic labels."""
+    try:
+        names = _dshow_camera_names()
+        if names:
+            return [(i, f"{i}: {n}") for i, n in enumerate(names)]
+    except Exception as e:
+        log(f"[video] DirectShow camera names unavailable ({e}); probing indexes")
     found = []
     for i in range(max_index):
         cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
         if cap.isOpened():
             found.append(i)
         cap.release()
-    names = _windows_camera_names()
-    if len(names) != len(found):
-        names = [f"Camera {i}" for i in found]
-    return [(i, f"{i}: {n}") for i, n in zip(found, names)]
+    return [(i, f"{i}: Camera {i}") for i in found]
 
 
 def list_devices():
@@ -263,6 +351,12 @@ def main():
     p.add_argument("--height", type=int, default=720)
     p.add_argument("--fps", type=int, default=30)
     p.add_argument("--quality", type=int, default=80, help="JPEG quality 1-100 (default 80)")
+    p.add_argument("--background", choices=("off", "blur", "image"), default="off",
+                   help="Virtual background: blur the room or replace it with a picture")
+    p.add_argument("--background-image", metavar="FILE",
+                   help="Picture for --background image (jpg/png)")
+    p.add_argument("--blur", choices=("light", "medium", "strong"), default="medium",
+                   help="Blur strength for --background blur (default medium)")
     p.add_argument("--list-devices", action="store_true", help="List cameras/mics and exit")
     args = p.parse_args()
 
@@ -272,6 +366,16 @@ def main():
 
     if not args.host:
         p.error("--host is required (the relay server IP). Use --list-devices to inspect devices.")
+    if args.background == "image" and not args.background_image:
+        p.error("--background image needs --background-image FILE")
+
+    bg = None
+    if args.background != "off":
+        import background
+        try:
+            bg = background.create(args.background, image=args.background_image, blur=args.blur)
+        except (OSError, ValueError) as e:
+            p.error(f"virtual background: {e}")
 
     enc = "TLS" if args.tls else "plain"
     log(f"CamBridge sender -> relay {args.host} (room '{args.room}', {enc}, "
@@ -280,7 +384,8 @@ def main():
 
     threads = start(args.host, args.room, use_tls=args.tls, cafile=args.cafile,
                     insecure=args.insecure, camera=args.camera, mic=args.mic,
-                    width=args.width, height=args.height, fps=args.fps, quality=args.quality)
+                    width=args.width, height=args.height, fps=args.fps, quality=args.quality,
+                    background=bg)
 
     try:
         while any(t.is_alive() for t in threads):

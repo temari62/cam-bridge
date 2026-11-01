@@ -157,6 +157,14 @@ guide inside the app.
    (Command-line alternative: `python sender.py --host <RELAY_IP> --room <TOKEN> --tls --cafile relay-cert.pem`.)
 2. The webcam light turns on and the remote PC's virtual camera starts showing your face.
 
+**Optional — virtual background.** In the **Camera (when sending)** tab, the **Camera** dropdown
+lists your cameras by their Windows names. Below it, set **Background** to **Blur** (Light /
+Medium / Strong) to soften the room behind you, or to **Picture** and **Browse** to a jpg/png
+that replaces it. Set it before clicking **Send**; the meeting PC receives the finished picture.
+The person is detected on your PC with OpenCV (nothing is sent to a cloud service); it costs
+about 20 ms per frame, so on a slow laptop lower the FPS or size if the video stutters.
+(Command line: `--background blur --blur strong` or `--background image --background-image office.jpg`.)
+
 That's it — the meeting now shows the employee's **local** camera and mic.
 
 > The old `start_sender.bat` / `start_receiver.bat` (command-line prompts) still work if you
@@ -178,8 +186,14 @@ installed, OBS's uninstaller removes the camera too — re-run the installer.
 **Receiver says "OBS Virtual Camera device not found! Did you install OBS?"** — same fix as
 above; that message comes from the `pyvirtualcam` library. OBS Studio itself isn't needed.
 
-**Camera is black / wrong camera on the local PC** — run `python sender.py --list-devices` and
-pass the right one, e.g. `python sender.py --host <ip> --camera 1`.
+**Camera is black / wrong camera on the local PC** — pick another device in the app's **Camera**
+dropdown (it lists cameras by their Windows names; click ↻ after plugging one in), or run
+`python sender.py --list-devices` and pass the right one, e.g. `python sender.py --host <ip> --camera 1`.
+
+**Virtual background shows halos or flickers at the edges** — sit in front of a plain,
+well-lit wall; avoid strong backlight. Blur is more forgiving than a replacement picture.
+"Virtual background could not be set up" means the picture file is missing/unreadable or the
+model file `client\models\pphumanseg.onnx` is absent (rebuild the exe with `build_exe.bat`).
 
 **Wrong microphone captured on the local PC** — run `--list-devices`, then
 `python sender.py --host <ip> --mic <index>`.

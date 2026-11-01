@@ -1,0 +1,15 @@
+pphumanseg.onnx - PP-HumanSeg portrait segmentation model (OpenCV Zoo build)
+
+Used by client/background.py for the "Virtual background" option in Send mode:
+it separates the person from the room so the room can be blurred or replaced.
+Runs on the CPU through OpenCV's DNN module; no extra Python packages needed.
+
+Source:   https://github.com/opencv/opencv_zoo/tree/main/models/human_segmentation_pphumanseg
+File:     human_segmentation_pphumanseg_2023mar.onnx  (renamed to pphumanseg.onnx)
+Download: https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/human_segmentation_pphumanseg/human_segmentation_pphumanseg_2023mar.onnx
+SHA-256:  552d8a984054e59b5d773d24b9b12022b22046ceb2bbc4c9aaeaceb36a9ddf24
+Size:     6,163,938 bytes
+License:  Apache-2.0 (PaddlePaddle Authors) - see LICENSE in this folder.
+
+Input:  1x3x192x192 float32, RGB, (pixel - 127.5) / 127.5
+Output: 1x2x192x192 float32 probabilities, channel 1 = person

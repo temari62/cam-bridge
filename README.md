@@ -17,6 +17,8 @@ cam-bridge/
 │   ├─ sender.py            local PC: capture + stream out       (CLI)
 │   ├─ receiver.py          remote PC: stream in -> virtual devices (CLI)
 │   ├─ cambridge_gui.py     the app for BOTH PCs: pick Send or Receive (Windows 11 look)
+│   ├─ background.py        virtual background for Send mode (blur / picture behind you)
+│   ├─ models/              person-segmentation model used by background.py (OpenCV Zoo, Apache-2.0)
 │   ├─ theme.py             shared Fluent theme + auto light/dark
 │   ├─ requirements.txt     Python dependencies
 │   ├─ build_exe.bat        build the standalone CamBridge.exe (PyInstaller)
