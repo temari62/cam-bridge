@@ -107,6 +107,9 @@ HELP = [
              "about 20 ms per frame: if the video stutters on a slow laptop, lower the FPS or the "
              "size. A picture is scaled and cropped to fill the frame, so use one with the same "
              "shape as the camera (16:9). Even light and a plain wall give the cleanest edges."),
+    ("body", "Have an NVIDIA RTX card? NVIDIA Broadcast's GPU effects are sharper than this "
+             "built-in one: pick 'Camera (NVIDIA Broadcast)' as the camera, set the background "
+             "in the Broadcast app, and leave Background here on None."),
 
     ("h1", "Updates"),
     ("body", "CamBridge checks GitHub for a newer release each time it starts. When one exists "
@@ -128,6 +131,10 @@ HELP = [
              "background adds CPU work; try Background = None to compare)."),
     ("body", "Wrong camera: the Camera dropdown lists the devices by their Windows names, in the "
              "order OpenCV uses. Click the refresh button after plugging a camera in."),
+    ("body", "NVIDIA Broadcast (or another virtual camera) as the source: it only streams at the "
+             "size chosen in its own app and sends black frames at any other size. CamBridge "
+             "notices this when it opens the camera (a few seconds, see the log), switches to that "
+             "size and scales the picture. Keep the NVIDIA Broadcast app running meanwhile."),
     ("body", "Echo in the meeting: mute the meeting PC's speakers or use headphones there."),
 ]
 

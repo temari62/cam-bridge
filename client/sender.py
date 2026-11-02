@@ -97,14 +97,65 @@ def connect_with_retry(host, port, room, label, ssl_ctx):
     return None
 
 
+# --- Camera opening ------------------------------------------------------------
+# Virtual cameras such as NVIDIA Broadcast only stream at the resolution chosen in
+# their own app; asked for any other size they deliver one black frame per second.
+# So after opening a camera we measure its real frame rate and, if it is stalled,
+# retry at the usual native sizes. The frames are scaled to the requested size anyway.
+NATIVE_SIZES = ((1920, 1080), (1280, 720), (640, 480), (2560, 1440), (3840, 2160), (1024, 576))
+MIN_LIVE_FPS = 4          # below this the camera is considered stalled
+PROBE_SECONDS = 1.0       # how long the frame rate is measured after the first frame
+
+
+def _stream_fps(cap, seconds=PROBE_SECONDS):
+    """Frames per second the camera really delivers, measured after its first frame."""
+    deadline = time.time() + seconds + 2.0   # allow 2 s for the first frame to show up
+    first = None
+    n = 0
+    while time.time() < deadline and not _stop.is_set():
+        ok, _ = cap.read()
+        if not ok:
+            time.sleep(0.02)
+            continue
+        if first is None:
+            first = time.time()
+            deadline = first + seconds
+            continue
+        n += 1
+    return n / seconds if first is not None else 0.0
+
+
+def open_camera(cam_index, width, height, fps):
+    """Open camera cam_index streaming at width x height, or at a native size if it
+    only runs there. Returns an opened cv2.VideoCapture, or None (reason is logged)."""
+    sizes = ((width, height),) + tuple(s for s in NATIVE_SIZES if s != (width, height))
+    for w, h in sizes:
+        cap = cv2.VideoCapture(cam_index, cv2.CAP_DSHOW)  # DSHOW = fast on Windows
+        if not cap.isOpened():
+            log(f"[video] ERROR: could not open camera index {cam_index}")
+            return None
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
+        cap.set(cv2.CAP_PROP_FPS, fps)
+        rate = _stream_fps(cap)
+        got = f"{cap.get(cv2.CAP_PROP_FRAME_WIDTH):.0f}x{cap.get(cv2.CAP_PROP_FRAME_HEIGHT):.0f}"
+        if rate >= MIN_LIVE_FPS:
+            if (w, h) != (width, height):
+                log(f"[video] camera streams at its native {got}; scaling to {width}x{height}")
+            return cap
+        cap.release()
+        if _stop.is_set():
+            return None
+        log(f"[video] camera gives only {rate:.0f} fps at {got}; trying another size")
+    log(f"[video] ERROR: camera index {cam_index} does not stream at any size "
+        "(a virtual camera may need its own app running)")
+    return None
+
+
 # --- Video thread --------------------------------------------------------------
 def video_loop(host, room, ssl_ctx, cam_index, width, height, fps, quality, background=None):
-    cap = cv2.VideoCapture(cam_index, cv2.CAP_DSHOW)  # DSHOW = fast on Windows
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-    cap.set(cv2.CAP_PROP_FPS, fps)
-    if not cap.isOpened():
-        log(f"[video] ERROR: could not open camera index {cam_index}")
+    cap = open_camera(cam_index, width, height, fps)
+    if cap is None:
         _stop.set()
         return
 

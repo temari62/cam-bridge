@@ -68,6 +68,10 @@ into a standalone `.exe` with PyInstaller so employees don't need Python install
 **Video capture:** `opencv-python` — reliable webcam access and JPEG encode/decode. Cameras are
 listed by name straight from Windows' DirectShow device enumerator (ctypes, no extra package),
 which is the same list OpenCV's `CAP_DSHOW` backend numbers, so the names and indexes always agree.
+Virtual cameras (NVIDIA Broadcast, for one) only stream at the size configured in their own app and
+emit one black frame per second otherwise, so `open_camera()` measures the real frame rate after
+opening and, if the camera is stalled, reopens it at the common native sizes; frames are scaled to
+the requested output size regardless.
 
 **Virtual background:** `background.py` runs the OpenCV Zoo **PP-HumanSeg** portrait model
 (`client/models/pphumanseg.onnx`, 6 MB, Apache-2.0) through OpenCV's built-in DNN module on the

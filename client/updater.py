@@ -128,10 +128,27 @@ def download(release, progress=None):
     return path
 
 
+# Environment variables PyInstaller's one-file bootloader uses to tell its child process
+# where it unpacked the app. The child keeps them, so every process it starts inherits
+# them. If the installer (and from it the new CamBridge.exe) inherits them, the new exe
+# sees its own path in _PYI_ARCHIVE_FILE, takes itself for that child, and tries to load
+# python3xx.dll from the old, already deleted _MEIxxxx folder:
+#   "Failed to load Python DLL ... _MEIxxxx\python312.dll ... module could not be found"
+PYINSTALLER_ENV = ("_PYI_APPLICATION_HOME_DIR", "_PYI_ARCHIVE_FILE",
+                   "_PYI_PARENT_PROCESS_LEVEL", "_PYI_SPLASH_IPC", "_MEIPASS2")
+
+
+def clean_bootloader_env():
+    """Drop PyInstaller's bootloader variables so child processes start fresh."""
+    for name in PYINSTALLER_ENV:
+        os.environ.pop(name, None)
+
+
 def install(path):
     """Launch the installer (UAC prompt appears). The caller should exit right after."""
     if not sys.platform.startswith("win"):
         raise RuntimeError("Self-update is only supported on Windows.")
+    clean_bootloader_env()
     # Inno's installer is marked requireAdministrator, so it must be started via
     # ShellExecute (os.startfile) for Windows to show the elevation prompt.
     os.startfile(path, arguments=INSTALL_ARGS)

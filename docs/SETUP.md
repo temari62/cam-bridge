@@ -190,6 +190,13 @@ above; that message comes from the `pyvirtualcam` library. OBS Studio itself isn
 dropdown (it lists cameras by their Windows names; click ↻ after plugging one in), or run
 `python sender.py --list-devices` and pass the right one, e.g. `python sender.py --host <ip> --camera 1`.
 
+**Sending NVIDIA Broadcast (or another virtual camera) gives black video** — such cameras only
+stream at the resolution set in their own app and send black frames at any other size. CamBridge
+detects this when it opens the camera (the log shows "camera gives only 1 fps ... trying another
+size", then "streams at its native 1920x1080; scaling to ..."), which takes a few seconds. Keep the
+NVIDIA Broadcast app running while sending. Tip: with an RTX card, NVIDIA Broadcast's own
+background effects beat the built-in Background option, so use them and leave Background on None.
+
 **Virtual background shows halos or flickers at the edges** — sit in front of a plain,
 well-lit wall; avoid strong backlight. Blur is more forgiving than a replacement picture.
 "Virtual background could not be set up" means the picture file is missing/unreadable or the
@@ -206,6 +213,12 @@ running on the VPS, the VPS firewall allows TCP 50007/50008, and the relay IP is
 
 **Connected to relay but no video/audio** — the two sides are using **different room tokens**, or
 the other side isn't running yet. Make sure both use the exact same `--room` value.
+
+**"Failed to load Python DLL ... \_MEIxxxx\python312.dll" right after an update** — the update
+itself succeeded; only the automatic relaunch failed (the old app passed its temporary unpack
+folder on to the new one). Just start CamBridge from the Start menu. Fixed in v1.2.0: updates
+*from* 1.2.0 onwards relaunch cleanly, and the 1.2.0 installer also relaunches cleanly when
+started from an older version.
 
 **Echo in the meeting** — make sure the remote PC's *speakers* are muted or use headphones on the
 remote side; the audio only needs to flow into CABLE, not out of the remote PC's speakers.

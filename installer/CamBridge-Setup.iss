@@ -83,7 +83,13 @@ Filename: "{syswow64}\regsvr32.exe"; Parameters: "/i /s ""{app}\virtualcam\obs-v
   Flags: runhidden waituntilterminated; Tasks: remotepc; Check: ShouldRegisterVCam
 ; 3) Self-update (the app runs setup with /VERYSILENT /UPDATE=1): relaunch the app
 ;    as the logged-on user once the new files are in place.
-Filename: "{app}\{#ExeName}"; Flags: nowait runasoriginaluser; Check: IsUpdateRun
+;    Setup was started by the old CamBridge.exe, a PyInstaller one-file app whose
+;    _PYI_* variables name its (now deleted) unpack folder. They are inherited down to
+;    this launch, and the new exe would try to load python3xx.dll from that folder
+;    ("Failed to load Python DLL"). Clear them before starting the app. CamBridge 1.2+
+;    also clears them itself; this guards updates from older builds.
+Filename: "{cmd}"; Parameters: "/c set ""_PYI_APPLICATION_HOME_DIR="" & set ""_PYI_ARCHIVE_FILE="" & set ""_PYI_PARENT_PROCESS_LEVEL="" & set ""_PYI_SPLASH_IPC="" & set ""_MEIPASS2="" & start """" ""{app}\{#ExeName}"""; \
+  Flags: nowait runhidden runasoriginaluser; Check: IsUpdateRun
 ; 4) Offer to launch the app, opened in the mode that fits this PC.
 Filename: "{app}\{#ExeName}"; Parameters: "--mode receive"; Description: "Launch CamBridge"; \
   Flags: postinstall nowait skipifsilent; Tasks: remotepc
