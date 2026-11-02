@@ -5,7 +5,7 @@ release script (tools/release.py) read it from here, and the app compares it
 against the latest GitHub release to offer updates.
 """
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 # GitHub repository that hosts the releases (must be public: the app downloads
 # the installer from it without credentials).

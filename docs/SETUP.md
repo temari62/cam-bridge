@@ -157,8 +157,10 @@ guide inside the app.
    (Command-line alternative: `python sender.py --host <RELAY_IP> --room <TOKEN> --tls --cafile relay-cert.pem`.)
 2. The webcam light turns on and the remote PC's virtual camera starts showing your face.
 
-**Optional — virtual background.** In the **Camera (when sending)** tab, the **Camera** dropdown
-lists your cameras by their Windows names. Below it, set **Background** to **Blur** (Light /
+**Optional — choose devices and a virtual background.** In the **Camera & mic (when sending)**
+tab, the **Camera** and **Microphone** dropdowns list your devices by their Windows names
+(**System default** = the microphone selected in Windows Sound settings). Below them, set
+**Background** to **Blur** (Light /
 Medium / Strong) to soften the room behind you, or to **Picture** and **Browse** to a jpg/png
 that replaces it. Set it before clicking **Send**; the meeting PC receives the finished picture.
 The person is detected on your PC with OpenCV (nothing is sent to a cloud service); it costs
@@ -202,8 +204,8 @@ well-lit wall; avoid strong backlight. Blur is more forgiving than a replacement
 "Virtual background could not be set up" means the picture file is missing/unreadable or the
 model file `client\models\pphumanseg.onnx` is absent (rebuild the exe with `build_exe.bat`).
 
-**Wrong microphone captured on the local PC** — run `--list-devices`, then
-`python sender.py --host <ip> --mic <index>`.
+**Wrong microphone captured on the local PC** — pick it in the app's **Microphone** dropdown, or
+run `--list-devices`, then `python sender.py --host <ip> --mic <index>`.
 
 **Choppy or laggy** — lower quality/size: `python sender.py --host <ip> --width 960 --height 540 --fps 20 --quality 65`.
 

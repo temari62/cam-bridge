@@ -379,14 +379,38 @@ def list_cameras(max_index=6):
     return [(i, f"{i}: Camera {i}") for i in found]
 
 
+def list_mics():
+    """Return [(index, name)] of the PC's microphones, each once, for --mic / the GUI.
+
+    PortAudio lists every device once per host API (MME, DirectSound, WASAPI, WDM-KS).
+    Only the entries of the API that owns the system default input are offered, so
+    they open exactly like the default does. That API (MME) cuts names at 31
+    characters, so a longer name is borrowed from another API's entry when one
+    starts with the same text."""
+    devices = sd.query_devices()
+    default_in = sd.default.device[0]
+    api = devices[default_in]["hostapi"] if 0 <= default_in < len(devices) else 0
+    inputs = [(i, d) for i, d in enumerate(devices) if d["max_input_channels"] > 0]
+    others = [d["name"] for _, d in inputs if d["hostapi"] != api]
+    mics = []
+    for i, d in inputs:
+        name = d["name"]
+        if d["hostapi"] != api or name.startswith(("Microsoft Sound Mapper",
+                                                   "Primary Sound Capture")):
+            continue  # another API's copy, or an alias of the system default
+        if len(name) >= 31:
+            name = next((n for n in others if n.startswith(name) and len(n) > len(name)), name)
+        mics.append((i, name))
+    return mics
+
+
 def list_devices():
     print("=== CAMERAS (use --camera <index>) ===")
     for i, label in list_cameras():
         print(f"  {label}")
-    print("\n=== AUDIO INPUT DEVICES (use --mic <index>) ===")
-    for i, d in enumerate(sd.query_devices()):
-        if d["max_input_channels"] > 0:
-            print(f"  [{i}] {d['name']}")
+    print("\n=== MICROPHONES (use --mic <index>; default = system default) ===")
+    for i, name in list_mics():
+        print(f"  [{i}] {name}")
 
 
 def main():

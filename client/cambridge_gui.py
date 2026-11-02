@@ -99,7 +99,7 @@ HELP = [
              "microphone' is ticked."),
 
     ("h1", "Virtual background (when sending)"),
-    ("body", "In the 'Camera (when sending)' tab set Background to Blur to soften the room behind "
+    ("body", "In the 'Camera & mic (when sending)' tab set Background to Blur to soften the room behind "
              "you (pick Light / Medium / Strong), or to Picture and Browse to a jpg/png that "
              "replaces the room. Set it before clicking Send; the meeting PC receives the "
              "finished picture, so nothing needs changing there."),
@@ -129,8 +129,10 @@ HELP = [
              "side is not running yet."),
     ("body", "Choppy: lower Width / Height / FPS under 'Camera' before clicking Send (a virtual "
              "background adds CPU work; try Background = None to compare)."),
-    ("body", "Wrong camera: the Camera dropdown lists the devices by their Windows names, in the "
-             "order OpenCV uses. Click the refresh button after plugging a camera in."),
+    ("body", "Wrong camera or microphone: the 'Camera & mic' tab has a dropdown for each, listing "
+             "the devices by their Windows names. 'System default' for the microphone means the "
+             "one selected in Windows Sound settings. Click the refresh button after plugging "
+             "a device in."),
     ("body", "NVIDIA Broadcast (or another virtual camera) as the source: it only streams at the "
              "size chosen in its own app and sends black frames at any other size. CamBridge "
              "notices this when it opens the camera (a few seconds, see the log), switches to that "
@@ -194,6 +196,7 @@ ICONS = {
     "room":   ("", "🔑"),  # lock / key
     "cert":   ("", "📄"),  # certificate / page
     "camera": ("", "📷"),  # camera
+    "mic":    ("", "🎤"),  # microphone
     "width":  ("↔", "↔"),   # left-right arrow
     "height": ("↕", "↕"),   # up-down arrow
     "fps":    ("", "⏱"),   # stopwatch
@@ -274,8 +277,8 @@ class App:
         self.cfg = cfg = load_cfg()
 
         root.title("CamBridge")
-        root.geometry("620x480")
-        root.minsize(560, 460)
+        root.geometry("620x520")
+        root.minsize(560, 500)
         self.mode_kind = theme.apply(root)
         theme.set_icon(root)
 
@@ -332,7 +335,7 @@ class App:
 
         # --- Camera (used when sending) ---
         adv = ttk.Frame(tabs, padding=(12, 14))
-        tabs.add(adv, text="  Camera (when sending)  ")
+        tabs.add(adv, text="  Camera & mic (when sending)  ")
         adv.columnconfigure(1, weight=1)
         # Camera: a dropdown of detected devices, filled in the background (opening
         # each DirectShow index takes a moment). self.cameras maps label -> index.
@@ -341,11 +344,17 @@ class App:
         self.camera = ttk.Combobox(adv, state="readonly", values=["Detecting cameras..."])
         self.camera.grid(row=0, column=1, columnspan=2, sticky="we", pady=(0, 8))
         self.camera.current(0)
-        self.refresh_btn = ttk.Button(adv, text="↻", width=3, command=self._scan_cameras)
+        self.refresh_btn = ttk.Button(adv, text="↻", width=3, command=self._scan_devices)
         self.refresh_btn.grid(row=0, column=3, sticky="w", padx=(8, 0), pady=(0, 8))
+        # Microphone: same idea. "System default" = whatever Windows has selected.
+        field_label(adv, "mic", "Microphone").grid(row=1, column=0, sticky="w", padx=(0, 8))
+        self.mics = {}
+        self.mic = ttk.Combobox(adv, state="readonly", values=["Detecting microphones..."])
+        self.mic.grid(row=1, column=1, columnspan=2, sticky="we", pady=(0, 8))
+        self.mic.current(0)
 
         size = ttk.Frame(adv)
-        size.grid(row=1, column=0, columnspan=4, sticky="w")
+        size.grid(row=2, column=0, columnspan=4, sticky="w")
         field_label(size, "width", "Width").grid(row=0, column=0, sticky="w", padx=(0, 8))
         self.width = ttk.Entry(size, width=7)
         self.width.grid(row=0, column=1, sticky="w", padx=(0, 18))
@@ -361,7 +370,7 @@ class App:
 
         # Virtual background: blur the room behind you or put a picture there.
         bgrow = ttk.Frame(adv)
-        bgrow.grid(row=2, column=0, columnspan=4, sticky="w", pady=(14, 0))
+        bgrow.grid(row=3, column=0, columnspan=4, sticky="w", pady=(14, 0))
         field_label(bgrow, "bg", "Background").grid(row=0, column=0, sticky="w", padx=(0, 8))
         self.bg_mode = ttk.Combobox(bgrow, state="readonly", width=9, values=list(BG_MODES))
         self.bg_mode.grid(row=0, column=1, sticky="w", padx=(0, 18))
@@ -372,15 +381,15 @@ class App:
         self.bg_blur.grid(row=0, column=3, sticky="w")
         self._select(self.bg_blur, BG_BLUR, cfg.get("bg_blur", "medium"))
 
-        field_label(adv, "image", "Picture").grid(row=3, column=0, sticky="w", padx=(0, 8),
+        field_label(adv, "image", "Picture").grid(row=4, column=0, sticky="w", padx=(0, 8),
                                                    pady=(8, 0))
         self.bg_image = ttk.Entry(adv)
-        self.bg_image.grid(row=3, column=1, columnspan=2, sticky="we", pady=(8, 0))
+        self.bg_image.grid(row=4, column=1, columnspan=2, sticky="we", pady=(8, 0))
         self.bg_image.insert(0, cfg.get("bg_image", ""))
         self.bg_browse = ttk.Button(adv, text="Browse", width=9, command=self._browse_image)
-        self.bg_browse.grid(row=3, column=3, sticky="w", padx=(8, 0), pady=(8, 0))
+        self.bg_browse.grid(row=4, column=3, sticky="w", padx=(8, 0), pady=(8, 0))
         self._bg_changed()
-        self._scan_cameras()
+        self._scan_devices()
 
         # --- Action bar: Send / Receive (each doubles as Stop) ---
         bar = ttk.Frame(outer)
@@ -585,28 +594,41 @@ class App:
             self.logbox.see("end")
             self.root.focus_force()
 
-    # --- Camera list --------------------------------------------------------------
-    def _scan_cameras(self):
-        """Detect cameras on a worker thread, then fill the dropdown on the UI thread."""
+    # --- Camera / microphone lists ----------------------------------------------------
+    def _scan_devices(self):
+        """Detect cameras and microphones on a worker thread, then fill the dropdowns."""
         self.camera.configure(values=["Detecting cameras..."])
         self.camera.current(0)
+        self.mic.configure(values=["Detecting microphones..."])
+        self.mic.current(0)
         self.refresh_btn.configure(state="disabled")
+
+        def detect(fn):
+            try:
+                return fn(), None
+            except Exception as e:  # OpenCV / sounddevice missing, etc.
+                return [], e
 
         def work():
             try:
                 import sender
-                cams = sender.list_cameras()
-            except Exception as e:  # OpenCV missing, etc.
-                cams, err = [], e
+            except Exception as e:
+                cams, mics = ([], e), ([], e)
             else:
-                err = None
-            self.root.after(0, lambda: self._fill_cameras(cams, err))
+                cams, mics = detect(sender.list_cameras), detect(sender.list_mics)
+            self.root.after(0, lambda: self._fill_devices(cams, mics))
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _fill_cameras(self, cams, err):
+    def _fill_devices(self, cams, mics):
         if not self.root.winfo_exists():
             return
+        self._fill_cameras(*cams)
+        self._fill_mics(*mics)
+        if self.running is None:
+            self.refresh_btn.configure(state="normal")
+
+    def _fill_cameras(self, cams, err):
         if err is not None:
             gui_log(f"camera detection failed: {err}")
         if not cams:
@@ -619,11 +641,31 @@ class App:
         want = self.cfg.get("camera", 0)
         pick = next((i for i, (idx, _) in enumerate(cams) if idx == want), 0)
         self.camera.current(pick)
-        if self.running is None:
-            self.refresh_btn.configure(state="normal")
+
+    MIC_DEFAULT = "System default"
+
+    def _fill_mics(self, mics, err):
+        """Dropdown of microphones; the saved one is found by name first, since
+        sounddevice's indexes shift when devices are plugged in or removed."""
+        if err is not None:
+            gui_log(f"microphone detection failed: {err}")
+        self.mics = {self.MIC_DEFAULT: None}
+        self.mics.update({name: idx for idx, name in mics})
+        labels = list(self.mics)
+        self.mic.configure(values=labels)
+        want_name, want_idx = self.cfg.get("mic_name"), self.cfg.get("mic")
+        if want_name in self.mics:
+            pick = labels.index(want_name)
+        else:
+            pick = next((i for i, l in enumerate(labels) if self.mics[l] == want_idx), 0)
+        self.mic.current(pick)
 
     def _camera_index(self):
         return self.cameras.get(self.camera.get(), self.cfg.get("camera", 0))
+
+    def _mic_index(self):
+        """sounddevice index of the chosen microphone, or None for the system default."""
+        return self.mics.get(self.mic.get())
 
     # --- Virtual background -------------------------------------------------------
     @staticmethod
@@ -701,7 +743,7 @@ class App:
                   self.width, self.height, self.fps, self.bg_blur, self.bg_image,
                   self.bg_browse):
             w.configure(state="disabled" if mode else "normal")
-        for w in (self.camera, self.bg_mode):
+        for w in (self.camera, self.mic, self.bg_mode):
             w.configure(state="disabled" if mode else "readonly")
         self._bg_changed()
         self.hint.configure(text=RECEIVE_HINT if mode == "receive" else "")
@@ -729,7 +771,8 @@ class App:
             return
         self.cfg.update({
             "mode": mode, "host": host, "room": room, "cafile": cafile,
-            "camera": self._camera_index(), "width": self._int(self.width, 1280),
+            "camera": self._camera_index(), "mic": self._mic_index(), "mic_name": self.mic.get(),
+            "width": self._int(self.width, 1280),
             "height": self._int(self.height, 720), "fps": self._int(self.fps, 30),
             "bg_mode": self._bg_mode(), "bg_blur": BG_BLUR.get(self.bg_blur.get(), "medium"),
             "bg_image": self.bg_image.get().strip(),
@@ -753,6 +796,7 @@ class App:
         try:
             if mode == "send":
                 self.threads = core.start(host, room, camera=self.cfg["camera"],
+                                          mic=self.cfg["mic"],
                                           width=self.cfg["width"], height=self.cfg["height"],
                                           fps=self.cfg["fps"], background=bg, **tls)
             else:
