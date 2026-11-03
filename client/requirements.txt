@@ -4,6 +4,9 @@
 # python.org Windows installer.
 # sv-ttk gives the GUIs a modern Windows 11 / Fluent look (light + dark).
 sv-ttk>=2.6
+# pystray + Pillow: the tray icon that keeps the app running after its window is closed.
+pystray>=0.19
+Pillow>=10
 opencv-python>=4.8
 numpy>=1.24
 sounddevice>=0.4.6

@@ -34,6 +34,7 @@ pyinstaller --noconfirm --clean --onefile --windowed ^
   --collect-all sounddevice ^
   --collect-all pyvirtualcam ^
   --collect-all sv_ttk ^
+  --hidden-import pystray._win32 ^
   cambridge_gui.py
 if errorlevel 1 goto :err
 call "..\tools\sign.bat" "dist\CamBridge.exe" || goto :err

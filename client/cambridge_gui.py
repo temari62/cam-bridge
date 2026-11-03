@@ -6,7 +6,8 @@ Type the relay address + room token, pick the relay's certificate file, then cli
   * Receive  - REMOTE PC: feed the stream into the virtual camera + mic, then pick
                "OBS Virtual Camera" and "CABLE Output" in your meeting app.
 Click the same button again to stop. The "?" button opens the setup guide and clicking the
-status badge opens the log in a side panel.
+status badge opens the log in a side panel. Closing the window leaves the app running in the
+notification area (tray); quit it from the tray icon's menu.
 
 The connection is always encrypted (TLS) and the relay certificate is required.
 
@@ -17,11 +18,13 @@ import argparse
 import json
 import os
 import queue
+import socket
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 import theme
+import tray
 import updater
 from version import __version__
 
@@ -30,6 +33,8 @@ CONFIG = os.path.join(os.path.expanduser("~"), ".cambridge.json")
 LEGACY_CONFIGS = (("receive", os.path.join(os.path.expanduser("~"), ".cambridge_receiver.json")),
                   ("send", os.path.join(os.path.expanduser("~"), ".cambridge_sender.json")))
 _log_queue = queue.Queue()
+# A second launch connects here to bring the running (maybe tray-hidden) window back.
+INSTANCE_ADDR = ("127.0.0.1", 47819)
 
 H1 = ("Segoe UI Semibold", 18)
 H2 = ("Segoe UI Semibold", 11)
@@ -275,6 +280,14 @@ class App:
         self.running = None   # "send" | "receive" | None
         self.help_win = None
         self.cfg = cfg = load_cfg()
+        self.calls = queue.Queue()   # callbacks from other threads, run on the Tk thread
+        self.tray = None
+        self.tray_hint_shown = False
+        if tray.available():
+            try:
+                self.tray = tray.Tray(self.calls, self.show_window, self.stop, self.quit)
+            except Exception as e:
+                gui_log(f"tray icon unavailable: {e}")
 
         root.title("CamBridge")
         root.geometry("620x520")
@@ -516,7 +529,7 @@ class App:
             self._update_failed(e)
             return
         # The installer replaces this exe and relaunches the app; get out of its way.
-        self.root.after(500, self._on_close)
+        self.root.after(500, self.quit)
 
     def _update_failed(self, err):
         gui_log(f"update failed: {err}")
@@ -718,6 +731,8 @@ class App:
             self.logbox.insert("end", line + "\n")
             self.logbox.see("end")
             self.logbox.configure(state="disabled")
+        while not self.calls.empty():
+            self.calls.get()()
         self.root.after(150, self._drain)
 
     def _int(self, entry, default):
@@ -728,6 +743,8 @@ class App:
 
     def _set_status(self, text, color):
         self.status.set(text, color)
+        if self.tray is not None:
+            self.tray.set_status(text, self.running is not None)
 
     def _set_running(self, mode):
         """mode = 'send' | 'receive' | None. The active button turns into Stop."""
@@ -812,6 +829,8 @@ class App:
             gui_log(RECEIVE_HINT)
 
     def stop(self):
+        if self.running is None:
+            return
         if self.core is not None:
             self.core.stop()
             self.core = None
@@ -819,13 +838,61 @@ class App:
         self._set_status("Idle", theme.IDLE_YELLOW)
         gui_log("--- stopped ---")
 
+    # --- Window / tray -----------------------------------------------------------
     def _on_close(self):
+        """Window X: hide to the tray and keep streaming. Without a tray icon, quit."""
+        if self.tray is None:
+            self.quit()
+            return
+        self.log_win.withdraw()
+        self.root.withdraw()
+        if not self.tray_hint_shown:
+            self.tray_hint_shown = True
+            self.tray.notify("CamBridge is still running. Use the tray icon to open or quit it.")
+
+    def show_window(self):
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+
+    def quit(self):
         try:
             if self.core is not None:
                 self.core.stop()
         except Exception:
             pass
+        if self.tray is not None:
+            self.tray.close()
         self.root.destroy()
+
+    def listen_for_instances(self, server):
+        """Bring the window back whenever another launch connects (see main())."""
+        def work():
+            while True:
+                try:
+                    conn, _ = server.accept()
+                    conn.close()
+                except OSError:
+                    return
+                self.calls.put(self.show_window)
+        threading.Thread(target=work, daemon=True).start()
+
+
+def claim_instance():
+    """Return a listening socket if this is the only CamBridge running, else None
+    (after asking the running one to show its window)."""
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        server.bind(INSTANCE_ADDR)
+        server.listen(4)
+        return server
+    except OSError:
+        server.close()
+    try:
+        socket.create_connection(INSTANCE_ADDR, timeout=2).close()
+        return None
+    except OSError:
+        return False  # port taken by something else: run anyway, just unguarded
 
 
 def main():
@@ -833,8 +900,13 @@ def main():
     p.add_argument("--mode", choices=("send", "receive"),
                    help=argparse.SUPPRESS)  # accepted for older installer shortcuts
     args = p.parse_args()
+    server = claim_instance()
+    if server is None:
+        return
     root = tk.Tk()
-    App(root, args.mode)
+    app = App(root, args.mode)
+    if server:
+        app.listen_for_instances(server)
     root.mainloop()
 
 

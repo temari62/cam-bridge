@@ -145,8 +145,8 @@ def style_log(text_widget):
         pass
 
 
-def set_icon(root):
-    """Best-effort: set the window/taskbar icon from assets/CamBridge.ico."""
+def icon_path():
+    """Path of assets/CamBridge.ico (bundled or in the source tree), or None."""
     import os
     import sys
     candidates = []
@@ -158,9 +158,16 @@ def set_icon(root):
     candidates += [os.path.join(here, "..", "assets", "CamBridge.ico"),
                    os.path.join(here, "assets", "CamBridge.ico")]
     for p in candidates:
-        try:
-            if os.path.exists(p):
-                root.iconbitmap(p)
-                return
-        except Exception:
-            pass
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def set_icon(root):
+    """Best-effort: set the window/taskbar icon from assets/CamBridge.ico."""
+    try:
+        p = icon_path()
+        if p:
+            root.iconbitmap(p)
+    except Exception:
+        pass
